@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>SignBear 🧸 - PDF Document Signing</title>
+  <title>SignBear 🧸 - Professional PDF Signing</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Dancing+Script:wght@700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Dancing+Script:wght@700&family=Great+Vibes&family=Pacifico&display=swap" rel="stylesheet">
   <script>
     tailwind.config = {
       theme: {
@@ -18,7 +18,9 @@
           fontFamily: {
             sans: ['Inter', 'sans-serif'],
             mono: ['JetBrains Mono', 'monospace'],
-            signature: ['Dancing Script', 'cursive'],
+            signature1: ['Dancing Script', 'cursive'],
+            signature2: ['Great Vibes', 'cursive'],
+            signature3: ['Pacifico', 'cursive'],
           }
         }
       }
@@ -27,255 +29,460 @@
   <style>
     * { -webkit-tap-highlight-color: transparent; }
     .signature-canvas { touch-action: none; }
-    .step-active { background: linear-gradient(135deg, rgb(37 99 235) 0%, rgb(29 78 216) 100%); }
-    .step-complete { background: rgb(34 197 94); }
-    .step-pending { background: rgb(71 85 105); }
-    .pdf-page { box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
-    .drop-zone.dragover { border-color: rgb(59 130 246); background: rgba(59 130 246, 0.1); }
+    .pdf-page-container { position: relative; }
+    .signature-field {
+      position: absolute;
+      border: 2px dashed #3b82f6;
+      background: rgba(59, 130, 246, 0.1);
+      cursor: move;
+      border-radius: 8px;
+    }
+    .signature-field:hover {
+      background: rgba(59, 130, 246, 0.2);
+    }
+    .signature-field.placed {
+      border-style: solid;
+      border-color: #22c55e;
+      background: rgba(34, 197, 94, 0.1);
+    }
+    .drop-zone.dragover {
+      border-color: rgb(59 130 246);
+      background: rgba(59 130 246, 0.1);
+      transform: scale(1.02);
+    }
+    .tab-active {
+      background: linear-gradient(135deg, rgb(37 99 235) 0%, rgb(29 78 216) 100%);
+      color: white;
+    }
+    .signature-preview {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    }
+    .glass-card {
+      background: rgba(30, 41, 59, 0.8);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(71, 85, 105, 0.5);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, rgb(37 99 235) 0%, rgb(29 78 216) 100%);
+      transition: all 0.2s ease;
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+    }
+    .btn-success {
+      background: linear-gradient(135deg, rgb(34 197 94) 0%, rgb(22 163 74) 100%);
+    }
+    .btn-success:hover {
+      box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+    }
+    .fade-in {
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .slide-up {
+      animation: slideUp 0.4s ease;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .color-option {
+      transition: all 0.2s ease;
+    }
+    .color-option.selected {
+      transform: scale(1.2);
+      box-shadow: 0 0 0 3px white, 0 0 0 5px currentColor;
+    }
   </style>
 </head>
-<body class="bg-slate-900 min-h-screen font-sans text-white">
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen font-sans text-white">
   
   <!-- Header -->
-  <header class="fixed top-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800">
+  <header class="fixed top-0 left-0 right-0 z-50 glass-card border-b border-slate-700/50">
     <div class="px-4 py-3">
       <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <span class="text-2xl">🧸</span>
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center text-xl shadow-lg">
+            🧸
+          </div>
           <div>
             <h1 class="text-lg font-bold">SignBear</h1>
-            <p class="text-xs text-slate-500" id="headerSubtitle">Sign documents securely</p>
+            <p class="text-xs text-slate-400" id="headerSubtitle">Professional PDF Signing</p>
           </div>
         </div>
-        <button onclick="resetApp()" class="p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl transition" title="New Document">
-          <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-          </svg>
-        </button>
+        <div class="flex items-center gap-2">
+          <button onclick="showHelp()" class="p-2.5 hover:bg-slate-700/50 rounded-xl transition" title="Help">
+            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+          </button>
+          <button onclick="resetApp()" class="p-2.5 hover:bg-slate-700/50 rounded-xl transition" title="New Document">
+            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
     
     <!-- Progress Steps -->
     <div class="px-4 pb-3" id="progressBar">
-      <div class="flex items-center gap-2">
-        <div class="step-indicator flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium step-active" data-step="1">1</div>
-        <div class="flex-1 h-1 bg-slate-700 rounded-full"><div class="progress-fill h-full bg-blue-600 rounded-full transition-all duration-500" style="width: 0%"></div></div>
-        <div class="step-indicator flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium step-pending" data-step="2">2</div>
-        <div class="flex-1 h-1 bg-slate-700 rounded-full"><div class="progress-fill h-full bg-blue-600 rounded-full transition-all duration-500" style="width: 0%"></div></div>
-        <div class="step-indicator flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium step-pending" data-step="3">3</div>
-        <div class="flex-1 h-1 bg-slate-700 rounded-full"><div class="progress-fill h-full bg-blue-600 rounded-full transition-all duration-500" style="width: 0%"></div></div>
-        <div class="step-indicator flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium step-pending" data-step="4">4</div>
+      <div class="flex items-center gap-1">
+        <div class="step-indicator flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold bg-blue-600 text-white" data-step="1">1</div>
+        <div class="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden"><div class="progress-fill h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-500" style="width: 0%"></div></div>
+        <div class="step-indicator flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold bg-slate-700 text-slate-400" data-step="2">2</div>
+        <div class="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden"><div class="progress-fill h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-500" style="width: 0%"></div></div>
+        <div class="step-indicator flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold bg-slate-700 text-slate-400" data-step="3">3</div>
+        <div class="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden"><div class="progress-fill h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-500" style="width: 0%"></div></div>
+        <div class="step-indicator flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold bg-slate-700 text-slate-400" data-step="4">4</div>
       </div>
-      <div class="flex justify-between mt-1 text-xs text-slate-500 px-1">
+      <div class="flex justify-between mt-1.5 text-[10px] text-slate-500 px-0.5 font-medium">
         <span>Upload</span>
-        <span>Sign</span>
-        <span>Review</span>
+        <span>Prepare</span>
+        <span>Place</span>
         <span>Done</span>
       </div>
     </div>
   </header>
 
   <!-- Main Content -->
-  <main class="pt-32 pb-8 px-4">
+  <main class="pt-28 pb-24 px-4 min-h-screen">
     
     <!-- Step 1: Upload -->
-    <section id="step1" class="step-content">
-      <div class="max-w-lg mx-auto">
-        <div class="drop-zone border-2 border-dashed border-slate-600 rounded-2xl p-8 text-center transition-all" id="dropZone">
-          <div class="text-5xl mb-4">📄</div>
-          <h2 class="text-xl font-semibold mb-2">Upload PDF Document</h2>
-          <p class="text-slate-400 text-sm mb-4">Drag & drop or tap to select</p>
-          <input type="file" id="fileInput" accept=".pdf" class="hidden">
-          <button onclick="document.getElementById('fileInput').click()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-xl font-medium transition">
-            Choose File
-          </button>
+    <section id="step1" class="step-content fade-in max-w-xl mx-auto">
+      <div class="text-center mb-6">
+        <h2 class="text-2xl font-bold mb-2">Upload Document</h2>
+        <p class="text-slate-400">PDF files only, up to 10MB</p>
+      </div>
+      
+      <div class="drop-zone border-2 border-dashed border-slate-600 rounded-2xl p-8 text-center transition-all cursor-pointer hover:border-slate-500" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <div class="w-16 h-16 mx-auto mb-4 bg-blue-500/20 rounded-2xl flex items-center justify-center">
+          <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+          </svg>
         </div>
-        
-        <!-- Recent Documents (if any) -->
-        <div class="mt-6" id="recentDocs" style="display: none;">
-          <h3 class="text-sm font-medium text-slate-400 mb-3">Recent Documents</h3>
-          <div id="recentDocsList" class="space-y-2"></div>
+        <p class="font-medium mb-1">Drop PDF here or tap to browse</p>
+        <p class="text-sm text-slate-500">Supports drag & drop</p>
+        <input type="file" id="fileInput" accept=".pdf" class="hidden">
+      </div>
+      
+      <!-- Features -->
+      <div class="mt-8 grid grid-cols-2 gap-3">
+        <div class="glass-card rounded-xl p-4 text-center">
+          <div class="text-2xl mb-2">✍️</div>
+          <p class="text-sm font-medium">Draw Signature</p>
+          <p class="text-xs text-slate-500">Natural handwriting</p>
+        </div>
+        <div class="glass-card rounded-xl p-4 text-center">
+          <div class="text-2xl mb-2">⌨️</div>
+          <p class="text-sm font-medium">Type Signature</p>
+          <p class="text-xs text-slate-500">Professional fonts</p>
+        </div>
+        <div class="glass-card rounded-xl p-4 text-center">
+          <div class="text-2xl mb-2">📍</div>
+          <p class="text-sm font-medium">Place Anywhere</p>
+          <p class="text-xs text-slate-500">On any page</p>
+        </div>
+        <div class="glass-card rounded-xl p-4 text-center">
+          <div class="text-2xl mb-2">🔲</div>
+          <p class="text-sm font-medium">QR Verification</p>
+          <p class="text-xs text-slate-500">Prove authenticity</p>
         </div>
       </div>
     </section>
 
-    <!-- Step 2: Sign -->
-    <section id="step2" class="step-content hidden">
-      <div class="max-w-lg mx-auto">
-        <!-- Document Info -->
-        <div class="bg-slate-800/50 rounded-xl p-4 mb-4 border border-slate-700/50">
-          <div class="flex items-center gap-3">
-            <div class="text-3xl">📄</div>
-            <div class="flex-1 min-w-0">
-              <h3 class="font-medium truncate" id="docTitle">Document.pdf</h3>
-              <p class="text-sm text-slate-400" id="docInfo">1 page • 123 KB</p>
+    <!-- Step 2: Prepare Signature -->
+    <section id="step2" class="step-content hidden max-w-xl mx-auto">
+      <div class="text-center mb-6">
+        <h2 class="text-2xl font-bold mb-2">Prepare Your Signature</h2>
+        <p class="text-slate-400">Create or select your signature style</p>
+      </div>
+      
+      <!-- Document Info Card -->
+      <div class="glass-card rounded-xl p-4 mb-5">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center text-xl">📄</div>
+          <div class="flex-1 min-w-0">
+            <p class="font-medium truncate" id="docTitle">document.pdf</p>
+            <p class="text-sm text-slate-400" id="docInfo">1 page • 123 KB</p>
+          </div>
+          <button onclick="previewDocument()" class="p-2 bg-slate-700/50 hover:bg-slate-600 rounded-lg transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Signer Info -->
+      <div class="glass-card rounded-xl p-4 mb-5">
+        <h3 class="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+          </svg>
+          Signer Information
+        </h3>
+        <div class="space-y-3">
+          <input type="text" id="signerName" placeholder="Full Name *" 
+            class="w-full bg-slate-700/50 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          <input type="email" id="signerEmail" placeholder="Email Address *" 
+            class="w-full bg-slate-700/50 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          <input type="text" id="signerTitle" placeholder="Title / Position (optional)" 
+            class="w-full bg-slate-700/50 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          <input type="text" id="signerOrg" placeholder="Organization (optional)" 
+            class="w-full bg-slate-700/50 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+        </div>
+      </div>
+      
+      <!-- Signature Type Tabs -->
+      <div class="glass-card rounded-xl overflow-hidden mb-5">
+        <div class="flex border-b border-slate-700">
+          <button onclick="setSignatureMode('draw')" id="tabDraw" class="flex-1 py-3 text-sm font-medium tab-active flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+            </svg>
+            Draw
+          </button>
+          <button onclick="setSignatureMode('type')" id="tabType" class="flex-1 py-3 text-sm font-medium text-slate-400 flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
+            </svg>
+            Type
+          </button>
+          <button onclick="setSignatureMode('upload')" id="tabUpload" class="flex-1 py-3 text-sm font-medium text-slate-400 flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            Upload
+          </button>
+        </div>
+        
+        <!-- Draw Mode -->
+        <div id="drawMode" class="p-4">
+          <!-- Color Options -->
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-xs text-slate-400">Color:</span>
+            <div class="flex gap-2">
+              <button onclick="setInkColor('#1e293b')" class="color-option w-6 h-6 rounded-full bg-slate-800 selected" data-color="#1e293b"></button>
+              <button onclick="setInkColor('#1d4ed8')" class="color-option w-6 h-6 rounded-full bg-blue-700" data-color="#1d4ed8"></button>
+              <button onclick="setInkColor('#0f172a')" class="color-option w-6 h-6 rounded-full bg-slate-900" data-color="#0f172a"></button>
             </div>
-            <button onclick="showPdfPreview()" class="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-              </svg>
+            <span class="text-xs text-slate-400 ml-4">Width:</span>
+            <div class="flex gap-1">
+              <button onclick="setLineWidth(2)" class="px-2 py-1 bg-slate-700 rounded text-xs font-medium">S</button>
+              <button onclick="setLineWidth(3)" class="px-2 py-1 bg-blue-600 rounded text-xs font-medium">M</button>
+              <button onclick="setLineWidth(5)" class="px-2 py-1 bg-slate-700 rounded text-xs font-medium">L</button>
+            </div>
+          </div>
+          <canvas id="signatureCanvas" class="signature-canvas w-full h-36 bg-white rounded-xl cursor-crosshair"></canvas>
+          <div class="flex justify-between mt-3">
+            <button onclick="clearSignature()" class="px-4 py-2 bg-slate-700/50 hover:bg-slate-600 rounded-lg text-sm font-medium transition">
+              Clear
+            </button>
+            <button onclick="undoStroke()" class="px-4 py-2 bg-slate-700/50 hover:bg-slate-600 rounded-lg text-sm font-medium transition">
+              Undo
             </button>
           </div>
         </div>
         
-        <!-- Signer Info -->
-        <div class="bg-slate-800/50 rounded-xl p-4 mb-4 border border-slate-700/50">
-          <h3 class="text-sm font-medium text-slate-400 mb-3">Your Information</h3>
-          <div class="space-y-3">
-            <input type="text" id="signerName" placeholder="Full Name *" 
-              class="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <input type="email" id="signerEmail" placeholder="Email Address *" 
-              class="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <!-- Type Mode -->
+        <div id="typeMode" class="p-4 hidden">
+          <input type="text" id="typedSignature" placeholder="Type your name" 
+            class="w-full bg-slate-700/50 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3">
+          
+          <!-- Font Options -->
+          <div class="grid grid-cols-3 gap-2 mb-3">
+            <button onclick="setSignatureFont('signature1')" class="font-btn p-3 bg-slate-700/50 rounded-xl text-center border-2 border-blue-500" data-font="signature1">
+              <span class="font-signature1 text-lg">Signature</span>
+            </button>
+            <button onclick="setSignatureFont('signature2')" class="font-btn p-3 bg-slate-700/50 rounded-xl text-center border-2 border-transparent" data-font="signature2">
+              <span class="font-signature2 text-lg">Signature</span>
+            </button>
+            <button onclick="setSignatureFont('signature3')" class="font-btn p-3 bg-slate-700/50 rounded-xl text-center border-2 border-transparent" data-font="signature3">
+              <span class="font-signature3 text-lg">Signature</span>
+            </button>
+          </div>
+          
+          <!-- Preview -->
+          <div class="signature-preview rounded-xl p-4 text-center">
+            <p id="typedSignaturePreview" class="font-signature1 text-3xl text-slate-800">Your Signature</p>
           </div>
         </div>
         
-        <!-- Signature Pad -->
-        <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="text-sm font-medium text-slate-400">Your Signature</h3>
-            <div class="flex gap-2">
-              <button onclick="setSignatureMode('draw')" id="modeDraw" class="px-3 py-1.5 bg-blue-600 rounded-lg text-sm font-medium transition">Draw</button>
-              <button onclick="setSignatureMode('type')" id="modeType" class="px-3 py-1.5 bg-slate-700 rounded-lg text-sm font-medium transition">Type</button>
-            </div>
+        <!-- Upload Mode -->
+        <div id="uploadMode" class="p-4 hidden">
+          <div class="border-2 border-dashed border-slate-600 rounded-xl p-6 text-center cursor-pointer hover:border-slate-500 transition" onclick="document.getElementById('sigUpload').click()">
+            <svg class="w-10 h-10 mx-auto mb-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            <p class="text-sm text-slate-400">Upload signature image (PNG, JPG)</p>
+            <input type="file" id="sigUpload" accept="image/*" class="hidden" onchange="handleSignatureUpload(event)">
           </div>
-          
-          <!-- Draw Mode -->
-          <div id="drawMode">
-            <canvas id="signatureCanvas" class="signature-canvas w-full h-40 bg-white rounded-xl cursor-crosshair"></canvas>
-            <div class="flex justify-between mt-3">
-              <button onclick="clearSignature()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition">
-                Clear
-              </button>
-              <button onclick="undoStroke()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition">
-                Undo
-              </button>
-            </div>
-          </div>
-          
-          <!-- Type Mode -->
-          <div id="typeMode" class="hidden">
-            <input type="text" id="typedSignature" placeholder="Type your name" 
-              class="w-full bg-white rounded-xl px-4 py-3 text-slate-800 font-signature text-2xl placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <div class="mt-3 p-4 bg-white rounded-xl">
-              <p class="font-signature text-3xl text-slate-800 text-center" id="typedSignaturePreview">Your signature</p>
-            </div>
+          <div id="uploadedSigPreview" class="mt-3 hidden">
+            <img id="uploadedSigImg" class="max-h-20 mx-auto rounded-lg">
           </div>
         </div>
-        
-        <!-- Continue Button -->
-        <button onclick="goToStep(3)" id="continueToReview" class="w-full mt-6 py-4 bg-blue-600 hover:bg-blue-700 rounded-xl font-semibold transition flex items-center justify-center gap-2">
-          Continue to Review
+      </div>
+      
+      <!-- Add Initials Option -->
+      <div class="glass-card rounded-xl p-4 mb-5">
+        <label class="flex items-center justify-between cursor-pointer">
+          <div>
+            <p class="font-medium">Include Initials</p>
+            <p class="text-sm text-slate-400">Add initials on each page</p>
+          </div>
+          <input type="checkbox" id="includeInitials" class="w-5 h-5 rounded bg-slate-700 border-slate-600 text-blue-600 focus:ring-blue-500">
+        </label>
+      </div>
+      
+      <!-- Continue Button -->
+      <button onclick="goToStep(3)" class="w-full py-4 btn-primary rounded-xl font-semibold transition flex items-center justify-center gap-2">
+        Continue to Place Signature
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+        </svg>
+      </button>
+    </section>
+
+    <!-- Step 3: Place Signature -->
+    <section id="step3" class="step-content hidden max-w-xl mx-auto">
+      <div class="text-center mb-6">
+        <h2 class="text-2xl font-bold mb-2">Place Your Signature</h2>
+        <p class="text-slate-400">Tap on the document to place your signature</p>
+      </div>
+      
+      <!-- Page Navigator -->
+      <div class="flex items-center justify-between mb-4">
+        <button onclick="prevPage()" id="prevPageBtn" class="p-2 bg-slate-700/50 hover:bg-slate-600 rounded-lg transition disabled:opacity-50" disabled>
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+          </svg>
+        </button>
+        <div class="text-center">
+          <span class="font-medium">Page <span id="currentPageNum">1</span> of <span id="totalPages">1</span></span>
+        </div>
+        <button onclick="nextPage()" id="nextPageBtn" class="p-2 bg-slate-700/50 hover:bg-slate-600 rounded-lg transition disabled:opacity-50">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
           </svg>
         </button>
       </div>
-    </section>
-
-    <!-- Step 3: Review -->
-    <section id="step3" class="step-content hidden">
-      <div class="max-w-lg mx-auto">
-        <h2 class="text-xl font-semibold mb-4">Review & Confirm</h2>
-        
-        <!-- Document Summary -->
-        <div class="bg-slate-800/50 rounded-xl p-4 mb-4 border border-slate-700/50">
-          <h3 class="text-sm font-medium text-slate-400 mb-3">Document</h3>
-          <div class="flex items-center gap-3">
-            <div class="text-3xl">📄</div>
-            <div>
-              <p class="font-medium" id="reviewDocTitle">Document.pdf</p>
-              <p class="text-sm text-slate-400" id="reviewDocInfo">1 page</p>
-            </div>
+      
+      <!-- PDF Page Display -->
+      <div class="bg-slate-800 rounded-2xl overflow-hidden mb-4" id="pdfPageContainer">
+        <div class="pdf-page-container relative" id="pdfPageWrapper">
+          <canvas id="pdfPageCanvas" class="w-full"></canvas>
+          <div id="signatureOverlay" class="absolute inset-0"></div>
+        </div>
+      </div>
+      
+      <!-- Signature Preview -->
+      <div class="glass-card rounded-xl p-4 mb-4">
+        <div class="flex items-center gap-4">
+          <div class="signature-preview rounded-lg p-2 flex-shrink-0">
+            <img id="placementSigPreview" class="h-12" alt="Your signature">
+          </div>
+          <div class="flex-1">
+            <p class="text-sm text-slate-400">Tap on the document above to place your signature</p>
           </div>
         </div>
-        
-        <!-- Signer Summary -->
-        <div class="bg-slate-800/50 rounded-xl p-4 mb-4 border border-slate-700/50">
-          <h3 class="text-sm font-medium text-slate-400 mb-3">Signer</h3>
-          <div class="flex items-center gap-3">
-            <div class="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-lg font-medium" id="reviewInitials">JD</div>
-            <div>
-              <p class="font-medium" id="reviewName">John Doe</p>
-              <p class="text-sm text-slate-400" id="reviewEmail">john@example.com</p>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Signature Preview -->
-        <div class="bg-slate-800/50 rounded-xl p-4 mb-4 border border-slate-700/50">
-          <h3 class="text-sm font-medium text-slate-400 mb-3">Signature</h3>
-          <div class="bg-white rounded-xl p-4">
-            <img id="reviewSignature" class="max-h-20 mx-auto" alt="Signature">
-          </div>
-        </div>
-        
-        <!-- Document ID -->
-        <div class="bg-slate-800/50 rounded-xl p-4 mb-4 border border-slate-700/50">
-          <h3 class="text-sm font-medium text-slate-400 mb-3">Document ID</h3>
-          <p class="font-mono text-sm text-slate-300" id="reviewDocId">Generating...</p>
-          <p class="text-xs text-slate-500 mt-1">This unique ID will be embedded in your signed document</p>
-        </div>
-        
-        <!-- Actions -->
-        <div class="flex gap-3">
-          <button onclick="goToStep(2)" class="flex-1 py-4 bg-slate-700 hover:bg-slate-600 rounded-xl font-semibold transition">
-            Back
-          </button>
-          <button onclick="signDocument()" id="signButton" class="flex-1 py-4 bg-green-600 hover:bg-green-700 rounded-xl font-semibold transition flex items-center justify-center gap-2">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            Sign Document
-          </button>
-        </div>
+      </div>
+      
+      <!-- Placed Signatures List -->
+      <div id="placedSignaturesList" class="hidden glass-card rounded-xl p-4 mb-4">
+        <h3 class="text-sm font-semibold text-slate-300 mb-2">Placed Signatures</h3>
+        <div id="signaturesListContent" class="space-y-2"></div>
+      </div>
+      
+      <!-- Actions -->
+      <div class="flex gap-3">
+        <button onclick="goToStep(2)" class="flex-1 py-4 bg-slate-700 hover:bg-slate-600 rounded-xl font-semibold transition">
+          Back
+        </button>
+        <button onclick="signDocument()" id="signButton" class="flex-1 py-4 btn-success rounded-xl font-semibold transition flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          Sign & Download
+        </button>
       </div>
     </section>
 
     <!-- Step 4: Done -->
-    <section id="step4" class="step-content hidden">
-      <div class="max-w-lg mx-auto text-center">
-        <div class="text-6xl mb-4">✅</div>
-        <h2 class="text-2xl font-bold mb-2">Document Signed!</h2>
-        <p class="text-slate-400 mb-6">Your signed document is ready</p>
+    <section id="step4" class="step-content hidden max-w-xl mx-auto text-center slide-up">
+      <div class="w-20 h-20 mx-auto mb-6 bg-green-500/20 rounded-full flex items-center justify-center">
+        <svg class="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+      </div>
+      
+      <h2 class="text-2xl font-bold mb-2">Document Signed!</h2>
+      <p class="text-slate-400 mb-6">Your document has been signed successfully</p>
+      
+      <!-- Document ID Card -->
+      <div class="glass-card rounded-xl p-5 mb-5">
+        <div class="flex items-center justify-between mb-4">
+          <div class="text-left">
+            <p class="text-xs text-slate-400 mb-1">Document ID</p>
+            <p class="font-mono text-lg" id="finalDocId">-</p>
+          </div>
+          <button onclick="copyDocId()" class="p-2 bg-slate-700/50 hover:bg-slate-600 rounded-lg transition" title="Copy ID">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+            </svg>
+          </button>
+        </div>
         
         <!-- QR Code -->
-        <div class="bg-white rounded-2xl p-6 mb-6 inline-block">
+        <div class="bg-white rounded-xl p-4 inline-block">
           <canvas id="qrCode"></canvas>
         </div>
-        <p class="text-sm text-slate-400 mb-6">Scan to verify document authenticity</p>
-        
-        <!-- Document ID -->
-        <div class="bg-slate-800/50 rounded-xl p-4 mb-6 border border-slate-700/50">
-          <p class="text-sm text-slate-400 mb-1">Document ID</p>
-          <p class="font-mono text-lg" id="finalDocId">-</p>
+        <p class="text-xs text-slate-400 mt-2">Scan to verify authenticity</p>
+      </div>
+      
+      <!-- Signer Info -->
+      <div class="glass-card rounded-xl p-4 mb-5 text-left">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center font-bold" id="finalInitials">JD</div>
+          <div>
+            <p class="font-medium" id="finalName">John Doe</p>
+            <p class="text-sm text-slate-400" id="finalEmail">john@example.com</p>
+          </div>
         </div>
-        
-        <!-- Actions -->
-        <div class="space-y-3">
-          <button onclick="downloadSignedPdf()" class="w-full py-4 bg-blue-600 hover:bg-blue-700 rounded-xl font-semibold transition flex items-center justify-center gap-2">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-            </svg>
-            Download Signed PDF
-          </button>
-          <button onclick="shareDocument()" class="w-full py-4 bg-slate-700 hover:bg-slate-600 rounded-xl font-semibold transition flex items-center justify-center gap-2">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
-            </svg>
-            Share
-          </button>
-          <button onclick="resetApp()" class="w-full py-4 bg-slate-800 hover:bg-slate-700 rounded-xl font-medium transition">
-            Sign Another Document
-          </button>
+        <div class="mt-3 pt-3 border-t border-slate-700 text-sm text-slate-400">
+          <p>Signed: <span id="finalDate">-</span></p>
         </div>
+      </div>
+      
+      <!-- Actions -->
+      <div class="space-y-3">
+        <button onclick="downloadSignedPdf()" class="w-full py-4 btn-primary rounded-xl font-semibold transition flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+          </svg>
+          Download Signed PDF
+        </button>
+        <button onclick="shareDocument()" class="w-full py-4 bg-slate-700 hover:bg-slate-600 rounded-xl font-semibold transition flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
+          </svg>
+          Share Verification Link
+        </button>
+        <button onclick="resetApp()" class="w-full py-3 text-slate-400 hover:text-white font-medium transition">
+          Sign Another Document
+        </button>
       </div>
     </section>
   </main>
 
   <!-- PDF Preview Modal -->
-  <div id="pdfModal" class="fixed inset-0 bg-black/90 z-50 hidden items-center justify-center">
-    <div class="absolute top-4 right-4">
+  <div id="pdfModal" class="fixed inset-0 bg-black/95 z-50 hidden items-center justify-center">
+    <div class="absolute top-4 right-4 z-10">
       <button onclick="closePdfPreview()" class="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -284,6 +491,43 @@
     </div>
     <div class="w-full max-w-3xl max-h-[90vh] overflow-auto p-4" id="pdfPreviewContainer">
       <div id="pdfPages" class="space-y-4"></div>
+    </div>
+  </div>
+
+  <!-- Help Modal -->
+  <div id="helpModal" class="fixed inset-0 bg-black/80 z-50 hidden items-center justify-center p-4">
+    <div class="glass-card rounded-2xl max-w-md w-full max-h-[80vh] overflow-auto">
+      <div class="p-5 border-b border-slate-700">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-bold">How to Use SignBear</h3>
+          <button onclick="closeHelp()" class="p-2 hover:bg-slate-700 rounded-lg">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="p-5 space-y-4 text-sm">
+        <div>
+          <h4 class="font-semibold mb-1">1. Upload</h4>
+          <p class="text-slate-400">Upload any PDF document (up to 10MB)</p>
+        </div>
+        <div>
+          <h4 class="font-semibold mb-1">2. Prepare</h4>
+          <p class="text-slate-400">Enter your details and create your signature by drawing, typing, or uploading an image</p>
+        </div>
+        <div>
+          <h4 class="font-semibold mb-1">3. Place</h4>
+          <p class="text-slate-400">Navigate through pages and tap to place your signature where needed</p>
+        </div>
+        <div>
+          <h4 class="font-semibold mb-1">4. Download</h4>
+          <p class="text-slate-400">Get your signed PDF with a verification page and QR code</p>
+        </div>
+        <div class="pt-4 border-t border-slate-700">
+          <p class="text-slate-500">Built with 🧸 by Little Bear</p>
+        </div>
+      </div>
     </div>
   </div>
 
