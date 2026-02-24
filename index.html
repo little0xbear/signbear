@@ -340,6 +340,21 @@
         </label>
       </div>
       
+      <!-- Signature Size -->
+      <div class="glass-card rounded-xl p-4 mb-5">
+        <div class="flex items-center justify-between mb-2">
+          <p class="font-medium">Signature Size</p>
+          <span class="text-sm text-slate-400" id="sigSizeLabel">Medium</span>
+        </div>
+        <input type="range" id="sigSize" min="80" max="250" value="150" 
+          class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+          oninput="updateSigSize(this.value)">
+        <div class="flex justify-between text-xs text-slate-500 mt-1">
+          <span>Small</span>
+          <span>Large</span>
+        </div>
+      </div>
+      
       <!-- Continue Button -->
       <button onclick="goToStep(3)" class="w-full py-4 btn-primary rounded-xl font-semibold transition flex items-center justify-center gap-2">
         Continue to Place Signature
@@ -363,7 +378,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
           </svg>
         </button>
-        <div class="text-center">
+        <div class="flex items-center gap-2">
           <span class="font-medium">Page <span id="currentPageNum">1</span> of <span id="totalPages">1</span></span>
         </div>
         <button onclick="nextPage()" id="nextPageBtn" class="p-2 bg-slate-700/50 hover:bg-slate-600 rounded-lg transition disabled:opacity-50">
@@ -371,6 +386,15 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
           </svg>
         </button>
+      </div>
+      
+      <!-- Quick page jump (for multi-page docs) -->
+      <div id="pageJumpContainer" class="hidden mb-4">
+        <div class="flex items-center justify-center gap-2">
+          <span class="text-sm text-slate-400">Jump to:</span>
+          <select id="pageJump" onchange="jumpToPage(this.value)" class="bg-slate-700 border border-slate-600 rounded-lg px-3 py-1 text-sm">
+          </select>
+        </div>
       </div>
       
       <!-- PDF Page Display -->

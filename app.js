@@ -308,6 +308,16 @@ function setLineWidth(width) {
   document.querySelector(`[onclick="setLineWidth(${width})"]`)?.classList.remove('bg-slate-700');
 }
 
+// Update signature size
+function updateSigSize(value) {
+  state.signatureSize = parseInt(value);
+  const labels = { 80: 'Tiny', 100: 'Small', 150: 'Medium', 200: 'Large', 250: 'Extra Large' };
+  const closest = Object.keys(labels).reduce((a, b) => 
+    Math.abs(b - value) < Math.abs(a - value) ? b : a
+  );
+  document.getElementById('sigSizeLabel').textContent = labels[closest] || 'Custom';
+}
+
 // Set signature mode
 function setSignatureMode(mode) {
   state.signatureMode = mode;
@@ -600,6 +610,19 @@ async function renderCurrentPage() {
   document.getElementById('prevPageBtn').disabled = state.currentPage <= 1;
   document.getElementById('nextPageBtn').disabled = state.currentPage >= state.totalPages;
   
+  // Show/hide page jump for multi-page documents
+  const pageJumpContainer = document.getElementById('pageJumpContainer');
+  if (state.totalPages > 3) {
+    pageJumpContainer.classList.remove('hidden');
+    const pageJump = document.getElementById('pageJump');
+    pageJump.innerHTML = '';
+    for (let i = 1; i <= state.totalPages; i++) {
+      pageJump.innerHTML += `<option value="${i}" ${i === state.currentPage ? 'selected' : ''}>Page ${i}</option>`;
+    }
+  } else {
+    pageJumpContainer.classList.add('hidden');
+  }
+  
   // Setup overlay for placements
   const overlay = document.getElementById('signatureOverlay');
   overlay.innerHTML = '';
@@ -780,6 +803,42 @@ async function nextPage() {
   if (state.currentPage < state.totalPages) {
     state.currentPage++;
     await renderCurrentPage();
+  }
+}
+
+async function jumpToPage(pageNum) {
+  const page = parseInt(pageNum);
+  if (page >= 1 && page <= state.totalPages) {
+    state.currentPage = page;
+    await renderCurrentPage();
+  }
+}
+
+async function jumpToPage(pageNum) {
+  const page = parseInt(pageNum);
+  if (page >= 1 && page <= state.totalPages && page !== state.currentPage) {
+    state.currentPage = page;
+    await renderCurrentPage();
+  }
+}
+
+// Update page jump dropdown
+function updatePageJumpDropdown() {
+  const container = document.getElementById('pageJumpContainer');
+  const select = document.getElementById('pageJump');
+  
+  if (state.totalPages > 3) {
+    container.classList.remove('hidden');
+    select.innerHTML = '';
+    for (let i = 1; i <= state.totalPages; i++) {
+      const option = document.createElement('option');
+      option.value = i;
+      option.textContent = `Page ${i}`;
+      option.selected = i === state.currentPage;
+      select.appendChild(option);
+    }
+  } else {
+    container.classList.add('hidden');
   }
 }
 
