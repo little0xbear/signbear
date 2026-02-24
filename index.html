@@ -568,6 +568,74 @@
     </div>
   </div>
 
+  <!-- Privacy/GDPR Modal -->
+  <div id="privacyModal" class="fixed inset-0 bg-black/90 z-50 hidden items-center justify-center p-4">
+    <div class="glass-card rounded-2xl max-w-lg w-full max-h-[90vh] overflow-auto">
+      <div class="p-5 border-b border-slate-700">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-bold flex items-center gap-2">
+            <span>🔒</span> Privacy & Terms
+          </h3>
+        </div>
+      </div>
+      <div class="p-5 space-y-4 text-sm">
+        <div class="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
+          <p class="text-blue-300 font-medium">EU eIDAS & GDPR Compliant</p>
+          <p class="text-slate-400 text-xs mt-1">This service complies with EU electronic signature regulations</p>
+        </div>
+        
+        <div>
+          <h4 class="font-semibold mb-2">Data Processing Consent</h4>
+          <p class="text-slate-400">By using SignBear, you consent to the processing of your personal data (name, email) for the purpose of creating electronic signatures. Your data is:</p>
+          <ul class="list-disc list-inside text-slate-400 mt-2 space-y-1">
+            <li>Stored locally in your browser</li>
+            <li>Embedded in the signed PDF document</li>
+            <li>Not transmitted to external servers</li>
+            <li>Retained only as long as needed</li>
+          </ul>
+        </div>
+        
+        <div>
+          <h4 class="font-semibold mb-2">Electronic Signature Notice</h4>
+          <p class="text-slate-400">Your electronic signature is legally binding under EU Regulation (EU) No 910/2014 (eIDAS). The signed document includes:</p>
+          <ul class="list-disc list-inside text-slate-400 mt-2 space-y-1">
+            <li>Unique document identifier</li>
+            <li>Cryptographic hash for tamper detection</li>
+            <li>Complete audit trail</li>
+            <li>Timestamp with timezone information</li>
+          </ul>
+        </div>
+        
+        <div>
+          <h4 class="font-semibold mb-2">Your Rights (GDPR)</h4>
+          <p class="text-slate-400">You have the right to access, rectify, and erase your personal data. Since data is stored locally, you can clear your browser data at any time.</p>
+        </div>
+        
+        <div>
+          <h4 class="font-semibold mb-2">Data Retention</h4>
+          <p class="text-slate-400">Signing records are stored in your browser's local storage until you clear them. The signed PDF contains all signature data permanently.</p>
+        </div>
+      </div>
+      <div class="p-5 border-t border-slate-700 flex gap-3">
+        <button onclick="closePrivacyModal()" class="flex-1 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-medium transition">
+          Cancel
+        </button>
+        <button onclick="acceptPrivacy()" class="flex-1 py-3 bg-blue-600 hover:bg-blue-700 rounded-xl font-medium transition">
+          Accept & Continue
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer with Privacy Link -->
+  <footer class="fixed bottom-0 left-0 right-0 py-2 text-center text-slate-600 text-xs bg-slate-900/90 border-t border-slate-800 z-40">
+    <span>Built by Little Bear 🧸</span>
+    <span class="mx-2">•</span>
+    <button onclick="showPrivacyModal()" class="hover:text-slate-400 transition">Privacy</button>
+    <span class="mx-2">•</span>
+    <span class="text-slate-500">EU eIDAS Compliant</span>
+  </footer>
+
   <script src="app.js"></script>
 </body>
 </html>

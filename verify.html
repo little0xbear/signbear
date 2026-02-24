@@ -32,7 +32,7 @@
   
   <!-- Header -->
   <header class="border-b border-slate-800 bg-slate-900/95">
-    <div class="max-w-lg mx-auto px-4 py-4">
+    <div class="max-w-2xl mx-auto px-4 py-4">
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center text-xl">
           🧸
@@ -46,7 +46,7 @@
   </header>
 
   <!-- Main Content -->
-  <main class="max-w-lg mx-auto px-4 py-8">
+  <main class="max-w-2xl mx-auto px-4 py-8">
     
     <!-- Status Badge -->
     <div id="statusBadge" class="text-center mb-8">
@@ -61,67 +61,158 @@
     </div>
 
     <!-- Document Info -->
-    <div id="documentInfo" class="glass-card rounded-2xl border border-slate-700/50 overflow-hidden hidden">
+    <div id="documentInfo" class="space-y-4 hidden">
       
-      <!-- Document ID -->
-      <div class="px-5 py-4 border-b border-slate-700/50">
-        <p class="text-xs text-slate-500 mb-1">Document ID</p>
-        <p class="font-mono text-lg" id="docId">-</p>
-      </div>
-      
-      <!-- Document Hash -->
-      <div class="px-5 py-4 border-b border-slate-700/50">
-        <p class="text-xs text-slate-500 mb-1">Document Hash</p>
-        <p class="font-mono text-sm text-slate-300" id="docHash">-</p>
-        <p class="text-xs text-slate-500 mt-1">Used to detect tampering</p>
-      </div>
-      
-      <!-- Status -->
-      <div class="px-5 py-4 border-b border-slate-700/50">
-        <p class="text-xs text-slate-500 mb-1">Status</p>
-        <div class="flex items-center gap-2" id="statusRow">
-          <span class="w-2 h-2 rounded-full bg-green-500"></span>
-          <span class="text-green-400">Signed & Valid</span>
+      <!-- Document ID Card -->
+      <div class="glass-card rounded-2xl border border-slate-700/50 overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-700/50 bg-slate-800/30">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-xs text-slate-500 mb-1">Document ID</p>
+              <p class="font-mono text-lg" id="docId">-</p>
+            </div>
+            <div id="statusBadge2" class="px-3 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400">
+              Verified
+            </div>
+          </div>
+        </div>
+        
+        <!-- Document Hash -->
+        <div class="px-5 py-4 border-b border-slate-700/50">
+          <p class="text-xs text-slate-500 mb-1">Document Hash (SHA-256)</p>
+          <p class="font-mono text-sm text-slate-300 break-all" id="docHash">-</p>
+          <p class="text-xs text-slate-500 mt-1">Use this to verify document integrity</p>
+        </div>
+        
+        <!-- Document Name -->
+        <div class="px-5 py-4 border-b border-slate-700/50">
+          <p class="text-xs text-slate-500 mb-1">Document</p>
+          <p class="font-medium" id="docName">-</p>
+        </div>
+        
+        <!-- Signer Info -->
+        <div class="px-5 py-4">
+          <p class="text-xs text-slate-500 mb-2">Signed By</p>
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center font-bold text-blue-400" id="signerInitials">-</div>
+            <div>
+              <p class="font-medium" id="signerName">-</p>
+              <p class="text-sm text-slate-400" id="signerEmail">-</p>
+            </div>
+          </div>
+          <div id="signerDetails" class="mt-3 pt-3 border-t border-slate-700/50 space-y-1 text-sm text-slate-400 hidden">
+            <p id="signerTitle"></p>
+            <p id="signerOrg"></p>
+          </div>
         </div>
       </div>
       
-      <!-- Document Name -->
-      <div class="px-5 py-4 border-b border-slate-700/50">
-        <p class="text-xs text-slate-500 mb-1">Document</p>
-        <p class="font-medium" id="docName">-</p>
+      <!-- Timestamps -->
+      <div class="glass-card rounded-2xl border border-slate-700/50 overflow-hidden">
+        <div class="px-5 py-3 bg-slate-800/30 border-b border-slate-700/50">
+          <p class="font-medium text-sm">Timestamps</p>
+        </div>
+        <div class="divide-y divide-slate-700/50">
+          <div class="px-5 py-3">
+            <p class="text-xs text-slate-500">Signed (UTC)</p>
+            <p class="font-mono text-sm" id="signedUTC">-</p>
+          </div>
+          <div class="px-5 py-3">
+            <p class="text-xs text-slate-500">Signed (Local)</p>
+            <p class="text-sm" id="signedLocal">-</p>
+          </div>
+          <div class="px-5 py-3">
+            <p class="text-xs text-slate-500">Signer Timezone</p>
+            <p class="text-sm" id="timezone">-</p>
+          </div>
+          <div class="px-5 py-3">
+            <p class="text-xs text-slate-500">Verified On</p>
+            <p class="text-sm" id="verifiedDate">-</p>
+          </div>
+        </div>
       </div>
       
-      <!-- Signed By -->
-      <div class="px-5 py-4 border-b border-slate-700/50">
-        <p class="text-xs text-slate-500 mb-1">Signed By</p>
-        <p class="font-medium" id="signerName">-</p>
-        <p class="text-sm text-slate-400" id="signerEmail">-</p>
-        <p class="text-sm text-slate-500" id="signerTitle" style="display: none;"></p>
-        <p class="text-sm text-slate-500" id="signerOrg" style="display: none;"></p>
+      <!-- Document Stats -->
+      <div class="glass-card rounded-2xl border border-slate-700/50 overflow-hidden">
+        <div class="px-5 py-3 bg-slate-800/30 border-b border-slate-700/50">
+          <p class="font-medium text-sm">Document Statistics</p>
+        </div>
+        <div class="grid grid-cols-3 divide-x divide-slate-700/50">
+          <div class="px-4 py-4 text-center">
+            <p class="text-2xl font-bold text-blue-400" id="totalPages">-</p>
+            <p class="text-xs text-slate-500">Pages</p>
+          </div>
+          <div class="px-4 py-4 text-center">
+            <p class="text-2xl font-bold text-green-400" id="sigCount">-</p>
+            <p class="text-xs text-slate-500">Signatures</p>
+          </div>
+          <div class="px-4 py-4 text-center">
+            <p class="text-2xl font-bold text-purple-400" id="dateCount">-</p>
+            <p class="text-xs text-slate-500">Dates</p>
+          </div>
+        </div>
       </div>
       
-      <!-- Signed Date -->
-      <div class="px-5 py-4 border-b border-slate-700/50">
-        <p class="text-xs text-slate-500 mb-1">Signed On</p>
-        <p id="signedDate">-</p>
+      <!-- Audit Trail -->
+      <div class="glass-card rounded-2xl border border-slate-700/50 overflow-hidden">
+        <div class="px-5 py-3 bg-slate-800/30 border-b border-slate-700/50">
+          <p class="font-medium text-sm">Audit Trail</p>
+        </div>
+        <div class="max-h-64 overflow-y-auto" id="auditLogContainer">
+          <table class="w-full text-xs">
+            <thead class="bg-slate-800/50 sticky top-0">
+              <tr>
+                <th class="px-4 py-2 text-left text-slate-400 font-medium">Time (UTC)</th>
+                <th class="px-4 py-2 text-left text-slate-400 font-medium">Event</th>
+                <th class="px-4 py-2 text-left text-slate-400 font-medium">Details</th>
+              </tr>
+            </thead>
+            <tbody id="auditLogBody" class="divide-y divide-slate-700/30">
+            </tbody>
+          </table>
+        </div>
       </div>
       
-      <!-- Verification Time -->
-      <div class="px-5 py-4">
-        <p class="text-xs text-slate-500 mb-1">Verified On</p>
-        <p id="verifiedDate">-</p>
+      <!-- Session Info -->
+      <div class="glass-card rounded-2xl border border-slate-700/50 overflow-hidden">
+        <div class="px-5 py-3 bg-slate-800/30 border-b border-slate-700/50">
+          <p class="font-medium text-sm">Session Information</p>
+        </div>
+        <div class="divide-y divide-slate-700/50 text-sm">
+          <div class="px-5 py-3 flex justify-between">
+            <span class="text-slate-400">Session Duration</span>
+            <span id="sessionDuration">-</span>
+          </div>
+          <div class="px-5 py-3 flex justify-between">
+            <span class="text-slate-400">Browser Language</span>
+            <span id="browserLang">-</span>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Info Box -->
-    <div class="mt-6 bg-blue-500/10 border border-blue-500/30 rounded-xl p-4" id="infoBox" style="display: none;">
+    <!-- Compliance Notice -->
+    <div class="mt-6 bg-green-500/10 border border-green-500/30 rounded-xl p-4" id="complianceBox" style="display: none;">
       <div class="flex gap-3">
-        <svg class="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        <svg class="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
         </svg>
         <div>
-          <p class="text-sm text-blue-300 font-medium">About this verification</p>
-          <p class="text-sm text-slate-400 mt-1" id="infoText">This page confirms that a document with this ID was signed using SignBear. The document hash can be used to verify the original document hasn't been tampered with.</p>
+          <p class="text-sm text-green-300 font-medium">EU eIDAS Compliant Signature</p>
+          <p class="text-sm text-slate-400 mt-1">This document was signed in accordance with EU Regulation No 910/2014. The signature is legally binding and the document integrity can be verified using the hash above.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Partial Verification Notice -->
+    <div class="mt-6 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4" id="partialBox" style="display: none;">
+      <div class="flex gap-3">
+        <svg class="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </svg>
+        <div>
+          <p class="text-sm text-yellow-300 font-medium">Partial Verification</p>
+          <p class="text-sm text-slate-400 mt-1" id="partialText">The document ID is valid, but full verification details are not available locally. Check the signed PDF for complete information.</p>
         </div>
       </div>
     </div>
@@ -157,15 +248,19 @@
         return;
       }
       
+      // Validate ID format
+      if (!docId.match(/^SB-[A-Z0-9]+-[A-Z0-9]+$/)) {
+        showError('Invalid document ID format');
+        return;
+      }
+      
       // Try to get stored document info
       const docs = JSON.parse(localStorage.getItem(SIGNED_DOCS_KEY) || '{}');
       const docInfo = docs[docId];
       
       if (docInfo) {
-        // Found in localStorage - show full details
         showVerified(docInfo);
       } else {
-        // Not found - show partial verification
         showPartialVerification(docId);
       }
     }, 500);
@@ -181,36 +276,88 @@
         <p class="text-slate-400 text-sm mt-1">This is a legitimate signed document</p>
       `;
       
+      // Document info
       document.getElementById('docId').textContent = docInfo.id;
       document.getElementById('docHash').textContent = docInfo.hash || 'Not available';
       document.getElementById('docName').textContent = docInfo.fileName;
+      
+      // Signer info
+      const initials = docInfo.signerName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+      document.getElementById('signerInitials').textContent = initials;
       document.getElementById('signerName').textContent = docInfo.signerName;
       document.getElementById('signerEmail').textContent = docInfo.signerEmail;
       
-      if (docInfo.signerTitle) {
-        document.getElementById('signerTitle').textContent = docInfo.signerTitle;
-        document.getElementById('signerTitle').style.display = 'block';
+      if (docInfo.signerTitle || docInfo.signerOrg) {
+        document.getElementById('signerDetails').classList.remove('hidden');
+        if (docInfo.signerTitle) document.getElementById('signerTitle').textContent = docInfo.signerTitle;
+        if (docInfo.signerOrg) document.getElementById('signerOrg').textContent = docInfo.signerOrg;
       }
       
-      if (docInfo.signerOrg) {
-        document.getElementById('signerOrg').textContent = docInfo.signerOrg;
-        document.getElementById('signerOrg').style.display = 'block';
+      // Timestamps
+      document.getElementById('signedUTC').textContent = docInfo.signedAt;
+      document.getElementById('signedLocal').textContent = docInfo.signedAtLocal || 'Not available';
+      document.getElementById('timezone').textContent = docInfo.timezone || 'Unknown';
+      
+      // Stats
+      document.getElementById('totalPages').textContent = docInfo.totalPages || '-';
+      document.getElementById('sigCount').textContent = docInfo.signatureCount || '0';
+      document.getElementById('dateCount').textContent = docInfo.dateCount || '0';
+      
+      // Session info
+      if (docInfo.sessionDuration) {
+        const seconds = Math.floor(docInfo.sessionDuration / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        document.getElementById('sessionDuration').textContent = minutes > 0 
+          ? `${minutes}m ${remainingSeconds}s`
+          : `${remainingSeconds}s`;
+      }
+      document.getElementById('browserLang').textContent = docInfo.language || 'Unknown';
+      
+      // Audit log
+      if (docInfo.auditLog && docInfo.auditLog.length > 0) {
+        const tbody = document.getElementById('auditLogBody');
+        tbody.innerHTML = docInfo.auditLog.map(entry => `
+          <tr class="hover:bg-slate-700/20">
+            <td class="px-4 py-2 font-mono text-slate-400">${entry.timestamp.split('T')[1]?.split('.')[0] || '-'}</td>
+            <td class="px-4 py-2 text-slate-300">${formatAction(entry.action)}</td>
+            <td class="px-4 py-2 text-slate-400">${entry.details.substring(0, 30)}${entry.details.length > 30 ? '...' : ''}</td>
+          </tr>
+        `).join('');
       }
       
-      // Format signed date
-      const signedDate = new Date(docInfo.signedAt);
-      document.getElementById('signedDate').textContent = signedDate.toLocaleString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZoneName: 'short'
-      });
-      
+      // Show compliance box
+      document.getElementById('complianceBox').style.display = 'block';
       document.getElementById('documentInfo').classList.remove('hidden');
-      document.getElementById('infoBox').style.display = 'block';
+    }
+    
+    function formatAction(action) {
+      const actionMap = {
+        'SESSION_START': '🚀 Session Started',
+        'GDPR_CONSENT': '✓ Privacy Accepted',
+        'DOCUMENT_UPLOAD': '📄 Document Uploaded',
+        'DOCUMENT_LOADED': '📑 Document Loaded',
+        'SIGNER_INFO': '👤 Info Saved',
+        'SIGNATURE_DRAW': '✍️ Signature Drawn',
+        'SIGNATURE_MODE': '🔄 Mode Changed',
+        'SIGNATURE_PLACED': '📍 Signature Placed',
+        'DATE_PLACED': '📅 Date Placed',
+        'SIGNATURE_REMOVED': '❌ Signature Removed',
+        'DATE_REMOVED': '❌ Date Removed',
+        'DOCUMENT_PREVIEW': '👁️ Document Previewed',
+        'SIGNING_STARTED': '🔐 Signing Started',
+        'DOCUMENT_SIGNED': '✅ Document Signed',
+        'DOCUMENT_DOWNLOADED': '📥 Document Downloaded',
+        'DOCUMENT_SHARED': '📤 Document Shared',
+        'LINK_COPIED': '📋 Link Copied',
+        'SIGNATURE_CLEAR': '🗑️ Signature Cleared',
+        'SIGNATURE_UNDO': '↩️ Stroke Undone',
+        'SIGNATURE_UPLOAD': '📤 Image Uploaded',
+        'PLACEMENT_MODE': '📍 Placement Mode',
+        'ERROR': '⚠️ Error',
+        'SESSION_RESET': '🔄 Session Reset'
+      };
+      return actionMap[action] || action;
     }
     
     function showPartialVerification(docId) {
@@ -225,20 +372,27 @@
       `;
       
       document.getElementById('docId').textContent = docId;
-      document.getElementById('docHash').textContent = 'Check the signed PDF for the document hash';
+      document.getElementById('docHash').textContent = 'Check signed PDF for hash';
       document.getElementById('docName').textContent = 'See signed PDF for details';
-      document.getElementById('signerName').textContent = 'See signed PDF for signer information';
+      document.getElementById('signerInitials').textContent = '?';
+      document.getElementById('signerName').textContent = 'See signed PDF';
       document.getElementById('signerEmail').textContent = '';
-      document.getElementById('signedDate').textContent = 'See signed PDF for signing date';
+      document.getElementById('signedUTC').textContent = 'See signed PDF';
+      document.getElementById('signedLocal').textContent = 'See signed PDF';
+      document.getElementById('timezone').textContent = 'Unknown';
+      document.getElementById('totalPages').textContent = '-';
+      document.getElementById('sigCount').textContent = '-';
+      document.getElementById('dateCount').textContent = '-';
+      document.getElementById('sessionDuration').textContent = '-';
+      document.getElementById('browserLang').textContent = '-';
       
-      document.getElementById('statusRow').innerHTML = `
-        <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
-        <span class="text-yellow-400">ID Valid (details not stored locally)</span>
-      `;
+      document.getElementById('statusBadge2').className = 'px-3 py-1 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-400';
+      document.getElementById('statusBadge2').textContent = 'Partial';
       
+      document.getElementById('auditLogContainer').innerHTML = '<p class="p-4 text-sm text-slate-400 text-center">Audit trail not available locally</p>';
+      
+      document.getElementById('partialBox').style.display = 'block';
       document.getElementById('documentInfo').classList.remove('hidden');
-      document.getElementById('infoBox').style.display = 'block';
-      document.getElementById('infoText').textContent = 'The document ID has a valid SignBear format. Full verification details are stored in the signed PDF itself. If you have the signed PDF, check the signature page for complete information.';
     }
     
     function showError(message) {
@@ -248,7 +402,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
           </svg>
         </div>
-        <h2 class="text-xl font-bold text-red-500">Invalid Link</h2>
+        <h2 class="text-xl font-bold text-red-500">Verification Failed</h2>
         <p class="text-slate-400 text-sm mt-1">${message}</p>
       `;
     }

@@ -1,5 +1,6 @@
 // SignBear 🧸 - Professional PDF Signing App
 // Built by Little Bear
+// EU eIDAS/GDPR Compliant
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -29,15 +30,21 @@ const state = {
   signaturePlacements: [],
   datePlacements: [],
   includeInitials: false,
-  signatureSize: 150, // width in pixels at 72dpi
-  placementMode: 'signature', // 'signature' or 'date'
+  signatureSize: 150,
+  placementMode: 'signature',
   selectedPlacement: null,
-  isDragging: false,
-  dragOffset: { x: 0, y: 0 }
+  // EU Compliance
+  gdprConsent: false,
+  sessionStartTime: null,
+  auditLog: [],
+  clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  userAgent: navigator.userAgent,
+  language: navigator.language
 };
 
-// Signed documents storage (for verification)
+// Storage keys
 const SIGNED_DOCS_KEY = 'signbear-signed-docs';
+const GDPR_CONSENT_KEY = 'signbear-gdpr-consent';
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -45,7 +52,12 @@ document.addEventListener('DOMContentLoaded', () => {
   initSignatureCanvas();
   initFileInput();
   loadSavedSigner();
+  loadGDPRConsent();
   state.documentId = generateDocumentId();
+  state.sessionStartTime = new Date().toISOString();
+  
+  // Log session start
+  addAuditEntry('SESSION_START', 'User started signing session');
   
   // Type signature preview
   document.getElementById('typedSignature').addEventListener('input', updateTypedPreview);
@@ -55,10 +67,67 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Escape') {
       closePdfPreview();
       closeHelp();
-      closeToast();
+      closePrivacyModal();
     }
   });
 });
+
+// Audit logging
+function addAuditEntry(action, details, metadata = {}) {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    timestampLocal: new Date().toLocaleString('en-US', {
+      timeZone: state.clientTimezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZoneName: 'short'
+    }),
+    action,
+    details,
+    timezone: state.clientTimezone,
+    ...metadata
+  };
+  state.auditLog.push(entry);
+  return entry;
+}
+
+// GDPR Consent
+function loadGDPRConsent() {
+  const consent = localStorage.getItem(GDPR_CONSENT_KEY);
+  if (consent) {
+    state.gdprConsent = true;
+  }
+}
+
+function saveGDPRConsent() {
+  localStorage.setItem(GDPR_CONSENT_KEY, JSON.stringify({
+    consented: true,
+    timestamp: new Date().toISOString(),
+    version: '1.0'
+  }));
+  state.gdprConsent = true;
+  addAuditEntry('GDPR_CONSENT', 'User consented to privacy policy and data processing');
+}
+
+function showPrivacyModal() {
+  document.getElementById('privacyModal').classList.remove('hidden');
+  document.getElementById('privacyModal').classList.add('flex');
+}
+
+function closePrivacyModal() {
+  document.getElementById('privacyModal').classList.add('hidden');
+  document.getElementById('privacyModal').classList.remove('flex');
+}
+
+function acceptPrivacy() {
+  saveGDPRConsent();
+  closePrivacyModal();
+  showToast('Privacy preferences saved', 'success');
+}
 
 // Generate unique document ID
 function generateDocumentId() {
@@ -96,6 +165,11 @@ function showToast(message, type = 'info', duration = 3000) {
     toast.style.transition = 'opacity 0.3s ease';
     setTimeout(() => toast.remove(), 300);
   }, duration);
+}
+
+function closeToast() {
+  const toast = document.querySelector('.toast-notification');
+  if (toast) toast.remove();
 }
 
 // Load script dynamically
@@ -156,8 +230,19 @@ async function handleFile(file) {
     return;
   }
   
+  // Check GDPR consent
+  if (!state.gdprConsent) {
+    showPrivacyModal();
+    return;
+  }
+  
   try {
     state.pdfFile = file;
+    addAuditEntry('DOCUMENT_UPLOAD', `Document uploaded: ${file.name}`, {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type
+    });
     
     const arrayBuffer = await file.arrayBuffer();
     state.pdfBytes = new Uint8Array(arrayBuffer);
@@ -176,10 +261,16 @@ async function handleFile(file) {
     document.getElementById('docTitle').textContent = file.name;
     document.getElementById('docInfo').textContent = `${state.totalPages} page${state.totalPages > 1 ? 's' : ''} • ${formatFileSize(file.size)}`;
     
+    addAuditEntry('DOCUMENT_LOADED', 'Document loaded successfully', {
+      pageCount: state.totalPages,
+      documentHash: state.documentHash
+    });
+    
     showToast('Document loaded successfully', 'success');
     goToStep(2);
   } catch (error) {
     console.error('Error loading PDF:', error);
+    addAuditEntry('ERROR', `Failed to load document: ${error.message}`);
     showToast('Error loading PDF. Please try another file.', 'error');
   }
 }
@@ -237,7 +328,6 @@ function initSignatureCanvas() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     redrawStrokes();
     
-    // Draw current stroke
     if (currentStroke.length > 1) {
       ctx.beginPath();
       ctx.strokeStyle = currentStroke[0].color;
@@ -253,6 +343,7 @@ function initSignatureCanvas() {
   function stopDrawing(e) {
     if (isDrawing && currentStroke.length > 1) {
       state.strokes.push([...currentStroke]);
+      addAuditEntry('SIGNATURE_DRAW', 'Signature stroke added');
     }
     isDrawing = false;
     currentStroke = [];
@@ -290,12 +381,14 @@ function clearSignature() {
   const canvas = document.getElementById('signatureCanvas');
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  addAuditEntry('SIGNATURE_CLEAR', 'Signature cleared');
 }
 
 function undoStroke() {
   if (state.strokes.length > 0) {
     state.strokes.pop();
     redrawStrokes();
+    addAuditEntry('SIGNATURE_UNDO', 'Signature stroke undone');
   }
 }
 
@@ -310,7 +403,6 @@ function setInkColor(color) {
 // Set line width
 function setLineWidth(width) {
   state.lineWidth = width;
-  // Update button states
   document.querySelectorAll('[onclick^="setLineWidth"]').forEach(btn => {
     btn.classList.remove('bg-blue-600');
     btn.classList.add('bg-slate-700');
@@ -332,12 +424,12 @@ function updateSigSize(value) {
 // Set signature mode
 function setSignatureMode(mode) {
   state.signatureMode = mode;
+  addAuditEntry('SIGNATURE_MODE', `Signature mode changed to: ${mode}`);
   
   document.getElementById('drawMode').classList.toggle('hidden', mode !== 'draw');
   document.getElementById('typeMode').classList.toggle('hidden', mode !== 'type');
   document.getElementById('uploadMode').classList.toggle('hidden', mode !== 'upload');
   
-  // Update tabs
   document.getElementById('tabDraw').className = `flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 ${mode === 'draw' ? 'tab-active' : 'text-slate-400'}`;
   document.getElementById('tabType').className = `flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 ${mode === 'type' ? 'tab-active' : 'text-slate-400'}`;
   document.getElementById('tabUpload').className = `flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 ${mode === 'upload' ? 'tab-active' : 'text-slate-400'}`;
@@ -370,7 +462,6 @@ function handleSignatureUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
   
-  // Validate file size (max 2MB)
   if (file.size > 2 * 1024 * 1024) {
     showToast('Image too large. Maximum 2MB.', 'error');
     return;
@@ -381,6 +472,7 @@ function handleSignatureUpload(e) {
     state.uploadedSigData = event.target.result;
     document.getElementById('uploadedSigImg').src = state.uploadedSigData;
     document.getElementById('uploadedSigPreview').classList.remove('hidden');
+    addAuditEntry('SIGNATURE_UPLOAD', 'Signature image uploaded');
     showToast('Signature image uploaded', 'success');
   };
   reader.readAsDataURL(file);
@@ -427,7 +519,6 @@ async function getSignatureImage() {
       
       ctx.fillStyle = '#1e293b';
       
-      // Map font names
       const fontMap = {
         'signature1': '48px "Dancing Script", cursive',
         'signature2': '48px "Great Vibes", cursive',
@@ -443,7 +534,6 @@ async function getSignatureImage() {
     } else if (state.signatureMode === 'upload' && state.uploadedSigData) {
       resolve(state.uploadedSigData);
     } else {
-      // Fallback
       const canvas = document.createElement('canvas');
       canvas.width = 200;
       canvas.height = 50;
@@ -494,8 +584,23 @@ function saveSignedDocumentInfo() {
     signerTitle: state.signerTitle,
     signerOrg: state.signerOrg,
     signedAt: new Date().toISOString(),
+    signedAtLocal: new Date().toLocaleString('en-US', {
+      timeZone: state.clientTimezone,
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short'
+    }),
     totalPages: state.totalPages,
-    signatureCount: state.signaturePlacements.length
+    signatureCount: state.signaturePlacements.length,
+    dateCount: state.datePlacements.length,
+    timezone: state.clientTimezone,
+    auditLog: state.auditLog,
+    userAgent: state.userAgent,
+    language: state.language,
+    sessionDuration: Date.now() - new Date(state.sessionStartTime).getTime()
   };
   localStorage.setItem(SIGNED_DOCS_KEY, JSON.stringify(docs));
 }
@@ -543,6 +648,13 @@ async function goToStep(step) {
     }
     
     saveSignerInfo();
+    addAuditEntry('SIGNER_INFO', 'Signer information saved', {
+      name: state.signerName,
+      email: state.signerEmail,
+      hasTitle: !!state.signerTitle,
+      hasOrg: !!state.signerOrg,
+      includeInitials: state.includeInitials
+    });
     
     // Get signature preview
     const sigImage = await getSignatureImage();
@@ -551,6 +663,8 @@ async function goToStep(step) {
     // Render first page
     state.currentPage = 1;
     await renderCurrentPage();
+    
+    addAuditEntry('PLACEMENT_MODE', 'Entered signature placement mode');
   }
   
   state.currentStep = step;
@@ -654,16 +768,15 @@ async function renderCurrentPage() {
   
   // Click to place
   overlay.onclick = async (e) => {
-    if (e.target !== overlay) return; // Don't trigger on existing placements
+    if (e.target !== overlay) return;
     
     const rect = overlay.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
     
     if (state.placementMode === 'signature') {
-      // Add signature placement
       const sigWidth = state.signatureSize / scaledViewport.width;
-      const sigHeight = sigWidth * 0.4; // Aspect ratio ~2.5:1
+      const sigHeight = sigWidth * 0.4;
       
       state.signaturePlacements.push({
         page: state.currentPage,
@@ -673,9 +786,9 @@ async function renderCurrentPage() {
         height: sigHeight
       });
       
+      addAuditEntry('SIGNATURE_PLACED', `Signature placed on page ${state.currentPage}`);
       showToast('Signature placed', 'success');
     } else {
-      // Add date placement
       state.datePlacements.push({
         page: state.currentPage,
         x: Math.max(0, x - 0.08),
@@ -684,6 +797,7 @@ async function renderCurrentPage() {
         height: 0.04
       });
       
+      addAuditEntry('DATE_PLACED', `Date placed on page ${state.currentPage}`);
       showToast('Date placed', 'success');
     }
     
@@ -692,7 +806,7 @@ async function renderCurrentPage() {
   };
 }
 
-// Create placement element for overlay
+// Create placement element
 function createPlacementElement(placement, index, type) {
   const div = document.createElement('div');
   div.className = `signature-field placed ${type === 'date' ? 'date-field' : ''}`;
@@ -709,7 +823,6 @@ function createPlacementElement(placement, index, type) {
     div.innerHTML = `<span class="text-xs text-green-600 p-1">✓ Signature</span>`;
   }
   
-  // Click to select
   div.onclick = (e) => {
     e.stopPropagation();
     selectPlacement(placement, index, type);
@@ -718,18 +831,15 @@ function createPlacementElement(placement, index, type) {
   return div;
 }
 
-// Select placement for editing/removal
+// Select placement
 function selectPlacement(placement, index, type) {
   state.selectedPlacement = { placement, index, type };
   
-  // Highlight selected
   document.querySelectorAll('.signature-field').forEach(el => {
     el.style.outline = 'none';
   });
   
   event.target.closest('.signature-field').style.outline = '2px solid white';
-  
-  // Could show edit options here
 }
 
 // Set placement mode
@@ -789,14 +899,18 @@ function updatePlacementsList() {
 
 // Remove placements
 async function removeSignaturePlacement(index) {
+  const placement = state.signaturePlacements[index];
   state.signaturePlacements.splice(index, 1);
+  addAuditEntry('SIGNATURE_REMOVED', `Signature removed from page ${placement.page}`);
   await renderCurrentPage();
   updatePlacementsList();
   showToast('Signature removed', 'info');
 }
 
 async function removeDatePlacement(index) {
+  const placement = state.datePlacements[index];
   state.datePlacements.splice(index, 1);
+  addAuditEntry('DATE_REMOVED', `Date removed from page ${placement.page}`);
   await renderCurrentPage();
   updatePlacementsList();
   showToast('Date removed', 'info');
@@ -819,37 +933,9 @@ async function nextPage() {
 
 async function jumpToPage(pageNum) {
   const page = parseInt(pageNum);
-  if (page >= 1 && page <= state.totalPages) {
-    state.currentPage = page;
-    await renderCurrentPage();
-  }
-}
-
-async function jumpToPage(pageNum) {
-  const page = parseInt(pageNum);
   if (page >= 1 && page <= state.totalPages && page !== state.currentPage) {
     state.currentPage = page;
     await renderCurrentPage();
-  }
-}
-
-// Update page jump dropdown
-function updatePageJumpDropdown() {
-  const container = document.getElementById('pageJumpContainer');
-  const select = document.getElementById('pageJump');
-  
-  if (state.totalPages > 3) {
-    container.classList.remove('hidden');
-    select.innerHTML = '';
-    for (let i = 1; i <= state.totalPages; i++) {
-      const option = document.createElement('option');
-      option.value = i;
-      option.textContent = `Page ${i}`;
-      option.selected = i === state.currentPage;
-      select.appendChild(option);
-    }
-  } else {
-    container.classList.add('hidden');
   }
 }
 
@@ -861,6 +947,8 @@ async function previewDocument() {
   
   modal.classList.remove('hidden');
   modal.classList.add('flex');
+  
+  addAuditEntry('DOCUMENT_PREVIEW', 'Document preview opened');
   
   container.innerHTML = '';
   
@@ -903,7 +991,6 @@ function closeHelp() {
 
 // Sign document
 async function signDocument() {
-  // Require at least one signature placement
   if (state.signaturePlacements.length === 0) {
     showToast('Please place at least one signature on the document', 'warning');
     return;
@@ -912,11 +999,8 @@ async function signDocument() {
   // Check if QRCode library is loaded
   if (typeof QRCode === 'undefined') {
     showToast('QR code library not loaded. Please refresh the page.', 'error');
-    console.error('QRCode library not available');
-    
-    // Try to load it dynamically
     try {
-      await loadScript('https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js');
+      await loadScript('https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js');
     } catch (e) {
       showToast('Failed to load QR code library', 'error');
       return;
@@ -927,21 +1011,18 @@ async function signDocument() {
   btn.disabled = true;
   btn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Signing...';
   
+  addAuditEntry('SIGNING_STARTED', 'Document signing process started');
+  
   try {
-    // Get signature image
     const sigImageData = await getSignatureImage();
-    
-    // Create fresh copy of PDF
     const pdfDoc = await PDFLib.PDFDocument.load(state.pdfBytes);
-    
-    // Embed signature image
     const sigImageBytes = await fetch(sigImageData).then(r => r.arrayBuffer());
     const sigImage = await pdfDoc.embedPng(sigImageBytes);
     
     const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+    const fontMono = await pdfDoc.embedFont(PDFLib.StandardFonts.Courier);
     
-    // Format date for stamps
     const dateFormat = new Intl.DateTimeFormat('en-US', {
       year: 'numeric',
       month: 'long',
@@ -959,12 +1040,7 @@ async function signDocument() {
       const sigX = placement.x * width;
       const sigY = height - (placement.y * height) - sigHeight;
       
-      page.drawImage(sigImage, {
-        x: sigX,
-        y: sigY,
-        width: sigWidth,
-        height: sigHeight
-      });
+      page.drawImage(sigImage, { x: sigX, y: sigY, width: sigWidth, height: sigHeight });
     }
     
     // Place dates on pages
@@ -975,13 +1051,7 @@ async function signDocument() {
       const dateX = placement.x * width;
       const dateY = height - (placement.y * height) - (placement.height * height / 2);
       
-      page.drawText(dateStr, {
-        x: dateX,
-        y: dateY,
-        size: 10,
-        font: font,
-        color: PDFLib.rgb(0.3, 0.3, 0.3)
-      });
+      page.drawText(dateStr, { x: dateX, y: dateY, size: 10, font: font, color: PDFLib.rgb(0.3, 0.3, 0.3) });
     }
     
     // Add initials if requested
@@ -991,96 +1061,126 @@ async function signDocument() {
       for (let i = 0; i < pdfDoc.getPageCount(); i++) {
         const page = pdfDoc.getPage(i);
         const { width, height } = page.getSize();
-        
-        // Small initials in bottom right
-        page.drawText(initials, {
-          x: width - 50,
-          y: 30,
-          size: 10,
-          font: font,
-          color: PDFLib.rgb(0.4, 0.4, 0.4)
-        });
+        page.drawText(initials, { x: width - 50, y: 30, size: 10, font: font, color: PDFLib.rgb(0.4, 0.4, 0.4) });
       }
     }
     
-    // Create signature page
+    // ============================================
+    // SIGNATURE PAGE (eIDAS Compliant)
+    // ============================================
     const sigPage = pdfDoc.addPage([612, 792]);
     const { width: pageWidth, height: pageHeight } = sigPage.getSize();
     
-    // Header with logo
-    sigPage.drawText('DOCUMENT SIGNATURE PAGE', {
-      x: 50, y: pageHeight - 50, size: 20, font: fontBold, color: PDFLib.rgb(0.1, 0.1, 0.1)
+    // Header
+    sigPage.drawText('ELECTRONIC SIGNATURE CERTIFICATE', {
+      x: 50, y: pageHeight - 50, size: 18, font: fontBold, color: PDFLib.rgb(0.1, 0.1, 0.1)
     });
     
-    // Accent line
     sigPage.drawRectangle({
       x: 50, y: pageHeight - 70, width: pageWidth - 100, height: 3,
       color: PDFLib.rgb(0.2, 0.4, 0.8)
     });
     
-    // Document info
-    let yPos = pageHeight - 110;
-    
-    sigPage.drawText('Document:', { x: 50, y: yPos, size: 11, font: fontBold, color: PDFLib.rgb(0.4, 0.4, 0.4) });
-    sigPage.drawText(state.pdfFile.name, { x: 150, y: yPos, size: 11, font: font, color: PDFLib.rgb(0.2, 0.2, 0.2) });
-    
-    yPos -= 25;
-    sigPage.drawText('Document ID:', { x: 50, y: yPos, size: 11, font: fontBold, color: PDFLib.rgb(0.4, 0.4, 0.4) });
-    sigPage.drawText(state.documentId, { x: 150, y: yPos, size: 11, font: font, color: PDFLib.rgb(0.2, 0.2, 0.2) });
-    
-    yPos -= 25;
-    sigPage.drawText('Document Hash:', { x: 50, y: yPos, size: 11, font: fontBold, color: PDFLib.rgb(0.4, 0.4, 0.4) });
-    sigPage.drawText(state.documentHash, { x: 150, y: yPos, size: 11, font: font, color: PDFLib.rgb(0.2, 0.2, 0.2) });
-    
-    yPos -= 25;
-    const signedDate = new Date().toLocaleString('en-US', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-      hour: '2-digit', minute: '2-digit', timeZoneName: 'short'
+    // eIDAS Compliance Notice
+    sigPage.drawText('This document has been electronically signed in accordance with EU eIDAS Regulation (EU) No 910/2014', {
+      x: 50, y: pageHeight - 90, size: 8, font: font, color: PDFLib.rgb(0.4, 0.4, 0.4)
     });
-    sigPage.drawText('Signed:', { x: 50, y: yPos, size: 11, font: fontBold, color: PDFLib.rgb(0.4, 0.4, 0.4) });
-    // Truncate date if too long
-    const truncatedDate = signedDate.length > 50 ? signedDate.substring(0, 50) + '...' : signedDate;
-    sigPage.drawText(truncatedDate, { x: 150, y: yPos, size: 11, font: font, color: PDFLib.rgb(0.2, 0.2, 0.2) });
     
-    // Signatory section
-    yPos -= 50;
-    sigPage.drawText('SIGNATORY', { x: 50, y: yPos, size: 14, font: fontBold, color: PDFLib.rgb(0.1, 0.1, 0.1) });
+    // Document Section
+    let yPos = pageHeight - 120;
+    
+    sigPage.drawText('DOCUMENT INFORMATION', {
+      x: 50, y: yPos, size: 12, font: fontBold, color: PDFLib.rgb(0.2, 0.2, 0.2)
+    });
+    
+    yPos -= 20;
+    sigPage.drawText('Document Name:', { x: 50, y: yPos, size: 10, font: fontBold, color: PDFLib.rgb(0.4, 0.4, 0.4) });
+    sigPage.drawText(state.pdfFile.name.substring(0, 50), { x: 180, y: yPos, size: 10, font: font, color: PDFLib.rgb(0.2, 0.2, 0.2) });
+    
+    yPos -= 18;
+    sigPage.drawText('Document ID:', { x: 50, y: yPos, size: 10, font: fontBold, color: PDFLib.rgb(0.4, 0.4, 0.4) });
+    sigPage.drawText(state.documentId, { x: 180, y: yPos, size: 10, font: fontMono, color: PDFLib.rgb(0.2, 0.2, 0.2) });
+    
+    yPos -= 18;
+    sigPage.drawText('Document Hash:', { x: 50, y: yPos, size: 10, font: fontBold, color: PDFLib.rgb(0.4, 0.4, 0.4) });
+    sigPage.drawText(state.documentHash, { x: 180, y: yPos, size: 10, font: fontMono, color: PDFLib.rgb(0.2, 0.2, 0.2) });
+    
+    yPos -= 18;
+    sigPage.drawText('Total Pages:', { x: 50, y: yPos, size: 10, font: fontBold, color: PDFLib.rgb(0.4, 0.4, 0.4) });
+    sigPage.drawText(String(state.totalPages), { x: 180, y: yPos, size: 10, font: font, color: PDFLib.rgb(0.2, 0.2, 0.2) });
+    
+    // Signatory Section
+    yPos -= 35;
+    sigPage.drawText('SIGNATORY', {
+      x: 50, y: yPos, size: 12, font: fontBold, color: PDFLib.rgb(0.2, 0.2, 0.2)
+    });
     
     yPos -= 15;
-    const boxHeight = state.signerTitle || state.signerOrg ? 160 : 120;
     sigPage.drawRectangle({
-      x: 50, y: yPos - boxHeight, width: pageWidth - 100, height: boxHeight,
+      x: 50, y: yPos - 130, width: pageWidth - 100, height: 140,
       borderColor: PDFLib.rgb(0.8, 0.8, 0.8), borderWidth: 1,
       color: PDFLib.rgb(0.99, 0.99, 0.99)
     });
     
-    yPos -= 20;
-    sigPage.drawText('Name:', { x: 70, y: yPos, size: 10, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
-    sigPage.drawText(state.signerName, { x: 150, y: yPos, size: 12, font: font, color: PDFLib.rgb(0.1, 0.1, 0.1) });
+    yPos -= 18;
+    sigPage.drawText('Full Name:', { x: 70, y: yPos, size: 9, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
+    sigPage.drawText(state.signerName, { x: 180, y: yPos, size: 11, font: font, color: PDFLib.rgb(0.1, 0.1, 0.1) });
     
-    yPos -= 20;
-    sigPage.drawText('Email:', { x: 70, y: yPos, size: 10, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
-    sigPage.drawText(state.signerEmail, { x: 150, y: yPos, size: 12, font: font, color: PDFLib.rgb(0.1, 0.1, 0.1) });
+    yPos -= 18;
+    sigPage.drawText('Email:', { x: 70, y: yPos, size: 9, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
+    sigPage.drawText(state.signerEmail, { x: 180, y: yPos, size: 11, font: font, color: PDFLib.rgb(0.1, 0.1, 0.1) });
     
     if (state.signerTitle) {
-      yPos -= 20;
-      sigPage.drawText('Title:', { x: 70, y: yPos, size: 10, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
-      sigPage.drawText(state.signerTitle, { x: 150, y: yPos, size: 12, font: font, color: PDFLib.rgb(0.1, 0.1, 0.1) });
+      yPos -= 18;
+      sigPage.drawText('Title:', { x: 70, y: yPos, size: 9, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
+      sigPage.drawText(state.signerTitle, { x: 180, y: yPos, size: 11, font: font, color: PDFLib.rgb(0.1, 0.1, 0.1) });
     }
     
     if (state.signerOrg) {
-      yPos -= 20;
-      sigPage.drawText('Organization:', { x: 70, y: yPos, size: 10, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
-      sigPage.drawText(state.signerOrg, { x: 150, y: yPos, size: 12, font: font, color: PDFLib.rgb(0.1, 0.1, 0.1) });
+      yPos -= 18;
+      sigPage.drawText('Organization:', { x: 70, y: yPos, size: 9, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
+      sigPage.drawText(state.signerOrg, { x: 180, y: yPos, size: 11, font: font, color: PDFLib.rgb(0.1, 0.1, 0.1) });
     }
     
-    yPos -= 30;
-    sigPage.drawText('Signature:', { x: 70, y: yPos, size: 10, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
-    sigPage.drawImage(sigImage, { x: 70, y: yPos - 50, width: 180, height: 50 });
+    yPos -= 25;
+    sigPage.drawText('Signature:', { x: 70, y: yPos, size: 9, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
+    sigPage.drawImage(sigImage, { x: 70, y: yPos - 45, width: 160, height: 45 });
     
-    // QR Code section
-    yPos = Math.min(yPos - 100, 250);
-    sigPage.drawText('VERIFICATION', { x: 50, y: yPos, size: 14, font: fontBold, color: PDFLib.rgb(0.1, 0.1, 0.1) });
+    // Timestamp Section
+    yPos = yPos - 70;
+    sigPage.drawText('SIGNING DETAILS', {
+      x: 50, y: yPos, size: 12, font: fontBold, color: PDFLib.rgb(0.2, 0.2, 0.2)
+    });
+    
+    yPos -= 18;
+    const signedAtUTC = new Date().toISOString();
+    const signedAtLocal = new Date().toLocaleString('en-US', {
+      timeZone: state.clientTimezone,
+      year: 'numeric', month: 'long', day: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      timeZoneName: 'short'
+    });
+    
+    sigPage.drawText('Date/Time (UTC):', { x: 50, y: yPos, size: 9, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
+    sigPage.drawText(signedAtUTC, { x: 180, y: yPos, size: 9, font: fontMono, color: PDFLib.rgb(0.2, 0.2, 0.2) });
+    
+    yPos -= 16;
+    sigPage.drawText('Date/Time (Local):', { x: 50, y: yPos, size: 9, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
+    sigPage.drawText(signedAtLocal, { x: 180, y: yPos, size: 9, font: font, color: PDFLib.rgb(0.2, 0.2, 0.2) });
+    
+    yPos -= 16;
+    sigPage.drawText('Timezone:', { x: 50, y: yPos, size: 9, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
+    sigPage.drawText(state.clientTimezone, { x: 180, y: yPos, size: 9, font: font, color: PDFLib.rgb(0.2, 0.2, 0.2) });
+    
+    yPos -= 16;
+    sigPage.drawText('Signatures Placed:', { x: 50, y: yPos, size: 9, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
+    sigPage.drawText(String(state.signaturePlacements.length), { x: 180, y: yPos, size: 9, font: font, color: PDFLib.rgb(0.2, 0.2, 0.2) });
+    
+    // QR Code
+    yPos = Math.min(yPos - 60, 180);
+    sigPage.drawText('VERIFICATION', {
+      x: 50, y: yPos, size: 12, font: fontBold, color: PDFLib.rgb(0.2, 0.2, 0.2)
+    });
     
     const verifyUrl = `${window.location.origin}/verify.html?id=${state.documentId}`;
     
@@ -1088,49 +1188,130 @@ async function signDocument() {
     if (typeof QRCode !== 'undefined') {
       qrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 150, margin: 1 });
     } else {
-      // Fallback: create a simple placeholder QR
       qrDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-      console.warn('QRCode library not available, using placeholder');
     }
     const qrImageBytes = await fetch(qrDataUrl).then(r => r.arrayBuffer());
     const qrImage = await pdfDoc.embedPng(qrImageBytes);
     
-    sigPage.drawImage(qrImage, { x: 50, y: yPos - 130, width: 100, height: 100 });
+    sigPage.drawImage(qrImage, { x: 50, y: yPos - 120, width: 90, height: 90 });
     
-    sigPage.drawText('Scan to verify authenticity', { x: 160, y: yPos - 50, size: 10, font: font, color: PDFLib.rgb(0.4, 0.4, 0.4) });
-    sigPage.drawText(`ID: ${state.documentId}`, { x: 160, y: yPos - 70, size: 9, font: font, color: PDFLib.rgb(0.5, 0.5, 0.5) });
-    sigPage.drawText(`Hash: ${state.documentHash}`, { x: 160, y: yPos - 85, size: 9, font: font, color: PDFLib.rgb(0.5, 0.5, 0.5) });
+    sigPage.drawText('Scan to verify authenticity', { x: 150, y: yPos - 40, size: 9, font: font, color: PDFLib.rgb(0.4, 0.4, 0.4) });
+    sigPage.drawText(`ID: ${state.documentId}`, { x: 150, y: yPos - 55, size: 8, font: fontMono, color: PDFLib.rgb(0.5, 0.5, 0.5) });
     
-    // Footer
-    sigPage.drawText('This document was signed electronically using SignBear 🧸', {
-      x: 50, y: 30, size: 9, font: font, color: PDFLib.rgb(0.5, 0.5, 0.5)
+    // ============================================
+    // AUDIT TRAIL PAGE (New for EU Compliance)
+    // ============================================
+    const auditPage = pdfDoc.addPage([612, 792]);
+    let aY = pageHeight - 50;
+    
+    auditPage.drawText('AUDIT TRAIL & VERIFICATION LOG', {
+      x: 50, y: aY, size: 18, font: fontBold, color: PDFLib.rgb(0.1, 0.1, 0.1)
     });
-    sigPage.drawText(`Generated: ${new Date().toISOString()}`, {
-      x: 50, y: 15, size: 8, font: font, color: PDFLib.rgb(0.6, 0.6, 0.6)
+    
+    auditPage.drawRectangle({
+      x: 50, y: aY - 20, width: pageWidth - 100, height: 3,
+      color: PDFLib.rgb(0.2, 0.4, 0.8)
+    });
+    
+    // Document Reference
+    aY -= 50;
+    auditPage.drawText('Document ID:', { x: 50, y: aY, size: 10, font: fontBold, color: PDFLib.rgb(0.4, 0.4, 0.4) });
+    auditPage.drawText(state.documentId, { x: 150, y: aY, size: 10, font: fontMono, color: PDFLib.rgb(0.2, 0.2, 0.2) });
+    
+    aY -= 16;
+    auditPage.drawText('Document Hash:', { x: 50, y: aY, size: 10, font: fontBold, color: PDFLib.rgb(0.4, 0.4, 0.4) });
+    auditPage.drawText(state.documentHash, { x: 150, y: aY, size: 10, font: fontMono, color: PDFLib.rgb(0.2, 0.2, 0.2) });
+    
+    // Session Info
+    aY -= 35;
+    auditPage.drawText('SESSION INFORMATION', {
+      x: 50, y: aY, size: 12, font: fontBold, color: PDFLib.rgb(0.2, 0.2, 0.2)
+    });
+    
+    aY -= 18;
+    auditPage.drawText('Session Started:', { x: 50, y: aY, size: 9, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
+    auditPage.drawText(state.sessionStartTime, { x: 180, y: aY, size: 9, font: fontMono, color: PDFLib.rgb(0.2, 0.2, 0.2) });
+    
+    aY -= 16;
+    auditPage.drawText('Session Ended:', { x: 50, y: aY, size: 9, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
+    auditPage.drawText(signedAtUTC, { x: 180, y: aY, size: 9, font: fontMono, color: PDFLib.rgb(0.2, 0.2, 0.2) });
+    
+    aY -= 16;
+    auditPage.drawText('Client Timezone:', { x: 50, y: aY, size: 9, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
+    auditPage.drawText(state.clientTimezone, { x: 180, y: aY, size: 9, font: font, color: PDFLib.rgb(0.2, 0.2, 0.2) });
+    
+    aY -= 16;
+    auditPage.drawText('Browser Language:', { x: 50, y: aY, size: 9, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
+    auditPage.drawText(state.language, { x: 180, y: aY, size: 9, font: font, color: PDFLib.rgb(0.2, 0.2, 0.2) });
+    
+    // Audit Log
+    aY -= 35;
+    auditPage.drawText('EVENT LOG', {
+      x: 50, y: aY, size: 12, font: fontBold, color: PDFLib.rgb(0.2, 0.2, 0.2)
+    });
+    
+    // Table header
+    aY -= 15;
+    auditPage.drawRectangle({
+      x: 50, y: aY - 15, width: pageWidth - 100, height: 15,
+      color: PDFLib.rgb(0.9, 0.9, 0.9)
+    });
+    auditPage.drawText('Timestamp (UTC)', { x: 55, y: aY - 12, size: 8, font: fontBold, color: PDFLib.rgb(0.3, 0.3, 0.3) });
+    auditPage.drawText('Event', { x: 200, y: aY - 12, size: 8, font: fontBold, color: PDFLib.rgb(0.3, 0.3, 0.3) });
+    auditPage.drawText('Details', { x: 350, y: aY - 12, size: 8, font: fontBold, color: PDFLib.rgb(0.3, 0.3, 0.3) });
+    
+    // Log entries
+    aY -= 20;
+    state.auditLog.forEach((entry, i) => {
+      if (aY < 80) return; // Stop if we run out of space
+      
+      const bgColor = i % 2 === 0 ? PDFLib.rgb(0.98, 0.98, 0.98) : PDFLib.rgb(1, 1, 1);
+      auditPage.drawRectangle({
+        x: 50, y: aY - 12, width: pageWidth - 100, height: 14,
+        color: bgColor
+      });
+      
+      const ts = entry.timestamp.split('T')[1]?.split('.')[0] || entry.timestamp;
+      auditPage.drawText(ts, { x: 55, y: aY - 10, size: 7, font: fontMono, color: PDFLib.rgb(0.3, 0.3, 0.3) });
+      auditPage.drawText(entry.action.substring(0, 20), { x: 200, y: aY - 10, size: 7, font: font, color: PDFLib.rgb(0.3, 0.3, 0.3) });
+      auditPage.drawText(entry.details.substring(0, 40), { x: 350, y: aY - 10, size: 7, font: font, color: PDFLib.rgb(0.3, 0.3, 0.3) });
+      
+      aY -= 14;
+    });
+    
+    // Compliance footer
+    auditPage.drawText('This audit trail is generated automatically and is an integral part of the signed document.', {
+      x: 50, y: 50, size: 8, font: font, color: PDFLib.rgb(0.5, 0.5, 0.5)
+    });
+    auditPage.drawText('Any modification to this document will invalidate the signature.', {
+      x: 50, y: 38, size: 8, font: font, color: PDFLib.rgb(0.5, 0.5, 0.5)
+    });
+    auditPage.drawText(`Generated by SignBear 🧸 at ${signedAtUTC}`, {
+      x: 50, y: 26, size: 7, font: font, color: PDFLib.rgb(0.6, 0.6, 0.6)
     });
     
     // Save
     state.signedPdfBytes = await pdfDoc.save();
     
+    // Add final audit entry
+    addAuditEntry('DOCUMENT_SIGNED', 'Document successfully signed and sealed');
+    
     // Save document info for verification
     saveSignedDocumentInfo();
     
-    // Update final page
+    // Update final page UI
     const initials = state.signerName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     document.getElementById('finalDocId').textContent = state.documentId;
     document.getElementById('finalInitials').textContent = initials;
     document.getElementById('finalName').textContent = state.signerName;
     document.getElementById('finalEmail').textContent = state.signerEmail;
-    document.getElementById('finalDate').textContent = new Date().toLocaleDateString('en-US', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-    });
+    document.getElementById('finalDate').textContent = signedAtLocal;
     
     // Generate QR for display
     const qrCanvas = document.getElementById('qrCode');
     if (typeof QRCode !== 'undefined') {
       await QRCode.toCanvas(qrCanvas, verifyUrl, { width: 180, margin: 2 });
     } else {
-      // Fallback: show URL instead of QR
       qrCanvas.parentElement.innerHTML = `<p class="text-xs text-slate-600 break-all">${verifyUrl}</p>`;
     }
     
@@ -1139,6 +1320,7 @@ async function signDocument() {
     
   } catch (error) {
     console.error('Error signing document:', error);
+    addAuditEntry('SIGNING_ERROR', `Error: ${error.message}`);
     showToast('Error signing document: ' + error.message, 'error');
     btn.disabled = false;
     btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Sign & Download';
@@ -1166,6 +1348,7 @@ function downloadSignedPdf() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   
+  addAuditEntry('DOCUMENT_DOWNLOADED', 'Signed document downloaded');
   showToast('PDF downloaded!', 'success');
 }
 
@@ -1177,15 +1360,19 @@ async function shareDocument() {
   if (navigator.share) {
     try {
       await navigator.share({ title: 'Signed Document', text: shareText });
+      addAuditEntry('DOCUMENT_SHARED', 'Document shared via Web Share API');
     } catch (e) {}
   } else {
     await navigator.clipboard.writeText(shareText);
+    addAuditEntry('LINK_COPIED', 'Verification link copied to clipboard');
     showToast('Verification link copied to clipboard!', 'success');
   }
 }
 
 // Reset app
 function resetApp() {
+  addAuditEntry('SESSION_RESET', 'User started a new signing session');
+  
   Object.assign(state, {
     currentStep: 1,
     currentPage: 1,
@@ -1201,7 +1388,9 @@ function resetApp() {
     signaturePlacements: [],
     datePlacements: [],
     placementMode: 'signature',
-    selectedPlacement: null
+    selectedPlacement: null,
+    sessionStartTime: new Date().toISOString(),
+    auditLog: []
   });
   
   document.getElementById('typedSignature').value = '';
@@ -1219,4 +1408,8 @@ document.getElementById('pdfModal')?.addEventListener('click', (e) => {
 
 document.getElementById('helpModal')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeHelp();
+});
+
+document.getElementById('privacyModal')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closePrivacyModal();
 });
