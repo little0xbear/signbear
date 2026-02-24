@@ -98,6 +98,17 @@ function showToast(message, type = 'info', duration = 3000) {
   }, duration);
 }
 
+// Load script dynamically
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
 // Initialize drop zone
 function initDropZone() {
   const dropZone = document.getElementById('dropZone');
@@ -898,6 +909,20 @@ async function signDocument() {
     return;
   }
   
+  // Check if QRCode library is loaded
+  if (typeof QRCode === 'undefined') {
+    showToast('QR code library not loaded. Please refresh the page.', 'error');
+    console.error('QRCode library not available');
+    
+    // Try to load it dynamically
+    try {
+      await loadScript('https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js');
+    } catch (e) {
+      showToast('Failed to load QR code library', 'error');
+      return;
+    }
+  }
+  
   const btn = document.getElementById('signButton');
   btn.disabled = true;
   btn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Signing...';
@@ -1058,7 +1083,15 @@ async function signDocument() {
     sigPage.drawText('VERIFICATION', { x: 50, y: yPos, size: 14, font: fontBold, color: PDFLib.rgb(0.1, 0.1, 0.1) });
     
     const verifyUrl = `${window.location.origin}/verify.html?id=${state.documentId}`;
-    const qrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 150, margin: 1 });
+    
+    let qrDataUrl;
+    if (typeof QRCode !== 'undefined') {
+      qrDataUrl = await QRCode.toDataURL(verifyUrl, { width: 150, margin: 1 });
+    } else {
+      // Fallback: create a simple placeholder QR
+      qrDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      console.warn('QRCode library not available, using placeholder');
+    }
     const qrImageBytes = await fetch(qrDataUrl).then(r => r.arrayBuffer());
     const qrImage = await pdfDoc.embedPng(qrImageBytes);
     
@@ -1094,7 +1127,12 @@ async function signDocument() {
     
     // Generate QR for display
     const qrCanvas = document.getElementById('qrCode');
-    await QRCode.toCanvas(qrCanvas, verifyUrl, { width: 180, margin: 2 });
+    if (typeof QRCode !== 'undefined') {
+      await QRCode.toCanvas(qrCanvas, verifyUrl, { width: 180, margin: 2 });
+    } else {
+      // Fallback: show URL instead of QR
+      qrCanvas.parentElement.innerHTML = `<p class="text-xs text-slate-600 break-all">${verifyUrl}</p>`;
+    }
     
     showToast('Document signed successfully!', 'success');
     goToStep(4);
