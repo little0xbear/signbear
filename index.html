@@ -381,6 +381,19 @@
         </div>
       </div>
       
+      <!-- Placement Mode Toggle -->
+      <div class="glass-card rounded-xl p-4 mb-4">
+        <p class="text-sm text-slate-400 mb-3">What to place:</p>
+        <div class="flex gap-2">
+          <button onclick="setPlacementMode('signature')" class="flex-1 py-2 px-3 bg-blue-600 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2">
+            <span>✍️</span> Signature
+          </button>
+          <button onclick="setPlacementMode('date')" class="flex-1 py-2 px-3 bg-slate-700 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2">
+            <span>📅</span> Date
+          </button>
+        </div>
+      </div>
+      
       <!-- Signature Preview -->
       <div class="glass-card rounded-xl p-4 mb-4">
         <div class="flex items-center gap-4">
@@ -388,7 +401,7 @@
             <img id="placementSigPreview" class="h-12" alt="Your signature">
           </div>
           <div class="flex-1">
-            <p class="text-sm text-slate-400">Tap on the document above to place your signature</p>
+            <p class="text-sm text-slate-400">Tap on the document to place the selected item</p>
           </div>
         </div>
       </div>

@@ -24,11 +24,20 @@ const state = {
   strokes: [],
   uploadedSigData: null,
   documentId: null,
+  documentHash: null,
   signedPdfBytes: null,
-  signaturePlacements: [], // { page, x, y, width, height }
+  signaturePlacements: [],
+  datePlacements: [],
   includeInitials: false,
-  pageCanvases: {} // cached rendered pages
+  signatureSize: 150, // width in pixels at 72dpi
+  placementMode: 'signature', // 'signature' or 'date'
+  selectedPlacement: null,
+  isDragging: false,
+  dragOffset: { x: 0, y: 0 }
 };
+
+// Signed documents storage (for verification)
+const SIGNED_DOCS_KEY = 'signbear-signed-docs';
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -40,6 +49,15 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Type signature preview
   document.getElementById('typedSignature').addEventListener('input', updateTypedPreview);
+  
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closePdfPreview();
+      closeHelp();
+      closeToast();
+    }
+  });
 });
 
 // Generate unique document ID
@@ -47,6 +65,37 @@ function generateDocumentId() {
   const timestamp = Date.now().toString(36).toUpperCase();
   const random = Math.random().toString(36).substring(2, 8).toUpperCase();
   return `SB-${timestamp}-${random}`;
+}
+
+// Generate document hash (for tamper detection)
+async function generateDocumentHash(bytes) {
+  const hashBuffer = await crypto.subtle.digest('SHA-256', bytes);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+// Toast notification
+function showToast(message, type = 'info', duration = 3000) {
+  const existing = document.querySelector('.toast-notification');
+  if (existing) existing.remove();
+  
+  const toast = document.createElement('div');
+  toast.className = `toast-notification fixed bottom-24 left-4 right-4 max-w-md mx-auto px-4 py-3 rounded-xl text-sm font-medium z-50 flex items-center gap-3 ${
+    type === 'success' ? 'bg-green-600' : 
+    type === 'error' ? 'bg-red-600' : 
+    type === 'warning' ? 'bg-yellow-600' : 'bg-blue-600'
+  }`;
+  
+  const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : type === 'warning' ? '⚠' : 'ℹ';
+  toast.innerHTML = `<span class="text-lg">${icon}</span><span>${message}</span>`;
+  
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
 }
 
 // Initialize drop zone
@@ -92,27 +141,36 @@ function initFileInput() {
 // Handle uploaded file
 async function handleFile(file) {
   if (file.size > 10 * 1024 * 1024) {
-    alert('File too large. Maximum size is 10MB.');
+    showToast('File too large. Maximum size is 10MB.', 'error');
     return;
   }
   
-  state.pdfFile = file;
-  
-  const arrayBuffer = await file.arrayBuffer();
-  state.pdfBytes = new Uint8Array(arrayBuffer);
-  
-  // Load with PDF.js for preview
-  state.pdfDoc = await pdfjsLib.getDocument({ data: state.pdfBytes.slice() }).promise;
-  state.totalPages = state.pdfDoc.numPages;
-  
-  // Load with pdf-lib for editing
-  state.pdfDocPdfLib = await PDFLib.PDFDocument.load(state.pdfBytes);
-  
-  // Update UI
-  document.getElementById('docTitle').textContent = file.name;
-  document.getElementById('docInfo').textContent = `${state.totalPages} page${state.totalPages > 1 ? 's' : ''} • ${formatFileSize(file.size)}`;
-  
-  goToStep(2);
+  try {
+    state.pdfFile = file;
+    
+    const arrayBuffer = await file.arrayBuffer();
+    state.pdfBytes = new Uint8Array(arrayBuffer);
+    
+    // Generate hash for tamper detection
+    state.documentHash = await generateDocumentHash(state.pdfBytes);
+    
+    // Load with PDF.js for preview
+    state.pdfDoc = await pdfjsLib.getDocument({ data: state.pdfBytes.slice() }).promise;
+    state.totalPages = state.pdfDoc.numPages;
+    
+    // Load with pdf-lib for editing
+    state.pdfDocPdfLib = await PDFLib.PDFDocument.load(state.pdfBytes);
+    
+    // Update UI
+    document.getElementById('docTitle').textContent = file.name;
+    document.getElementById('docInfo').textContent = `${state.totalPages} page${state.totalPages > 1 ? 's' : ''} • ${formatFileSize(file.size)}`;
+    
+    showToast('Document loaded successfully', 'success');
+    goToStep(2);
+  } catch (error) {
+    console.error('Error loading PDF:', error);
+    showToast('Error loading PDF. Please try another file.', 'error');
+  }
 }
 
 // Format file size
@@ -241,6 +299,13 @@ function setInkColor(color) {
 // Set line width
 function setLineWidth(width) {
   state.lineWidth = width;
+  // Update button states
+  document.querySelectorAll('[onclick^="setLineWidth"]').forEach(btn => {
+    btn.classList.remove('bg-blue-600');
+    btn.classList.add('bg-slate-700');
+  });
+  document.querySelector(`[onclick="setLineWidth(${width})"]`)?.classList.add('bg-blue-600');
+  document.querySelector(`[onclick="setLineWidth(${width})"]`)?.classList.remove('bg-slate-700');
 }
 
 // Set signature mode
@@ -284,11 +349,18 @@ function handleSignatureUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
   
+  // Validate file size (max 2MB)
+  if (file.size > 2 * 1024 * 1024) {
+    showToast('Image too large. Maximum 2MB.', 'error');
+    return;
+  }
+  
   const reader = new FileReader();
   reader.onload = (event) => {
     state.uploadedSigData = event.target.result;
     document.getElementById('uploadedSigImg').src = state.uploadedSigData;
     document.getElementById('uploadedSigPreview').classList.remove('hidden');
+    showToast('Signature image uploaded', 'success');
   };
   reader.readAsDataURL(file);
 }
@@ -389,6 +461,30 @@ function saveSignerInfo() {
   }));
 }
 
+// Save signed document info for verification
+function saveSignedDocumentInfo() {
+  const docs = JSON.parse(localStorage.getItem(SIGNED_DOCS_KEY) || '{}');
+  docs[state.documentId] = {
+    id: state.documentId,
+    hash: state.documentHash,
+    fileName: state.pdfFile.name,
+    signerName: state.signerName,
+    signerEmail: state.signerEmail,
+    signerTitle: state.signerTitle,
+    signerOrg: state.signerOrg,
+    signedAt: new Date().toISOString(),
+    totalPages: state.totalPages,
+    signatureCount: state.signaturePlacements.length
+  };
+  localStorage.setItem(SIGNED_DOCS_KEY, JSON.stringify(docs));
+}
+
+// Get signed document info
+function getSignedDocumentInfo(docId) {
+  const docs = JSON.parse(localStorage.getItem(SIGNED_DOCS_KEY) || '{}');
+  return docs[docId] || null;
+}
+
 // Go to step
 async function goToStep(step) {
   // Validate before step 3
@@ -400,25 +496,28 @@ async function goToStep(step) {
     state.includeInitials = document.getElementById('includeInitials').checked;
     
     if (!state.signerName) {
-      alert('Please enter your name');
+      showToast('Please enter your name', 'warning');
+      document.getElementById('signerName').focus();
       return;
     }
     if (!state.signerEmail || !state.signerEmail.includes('@')) {
-      alert('Please enter a valid email address');
+      showToast('Please enter a valid email address', 'warning');
+      document.getElementById('signerEmail').focus();
       return;
     }
     
     // Check signature
     if (state.signatureMode === 'draw' && state.strokes.length === 0) {
-      alert('Please draw your signature');
+      showToast('Please draw your signature', 'warning');
       return;
     }
     if (state.signatureMode === 'type' && !document.getElementById('typedSignature').value.trim()) {
-      alert('Please type your signature');
+      showToast('Please type your signature', 'warning');
+      document.getElementById('typedSignature').focus();
       return;
     }
     if (state.signatureMode === 'upload' && !state.uploadedSigData) {
-      alert('Please upload a signature image');
+      showToast('Please upload a signature image', 'warning');
       return;
     }
     
@@ -501,42 +600,114 @@ async function renderCurrentPage() {
   document.getElementById('prevPageBtn').disabled = state.currentPage <= 1;
   document.getElementById('nextPageBtn').disabled = state.currentPage >= state.totalPages;
   
-  // Setup click handler for signature placement
+  // Setup overlay for placements
   const overlay = document.getElementById('signatureOverlay');
   overlay.innerHTML = '';
   
-  // Show existing placements on this page
-  const pagePlacements = state.signaturePlacements.filter(p => p.page === state.currentPage);
-  pagePlacements.forEach((p, i) => {
-    const div = document.createElement('div');
-    div.className = 'signature-field placed';
-    div.style.left = `${p.x * 100}%`;
-    div.style.top = `${p.y * 100}%`;
-    div.style.width = `${p.width * 100}%`;
-    div.style.height = `${p.height * 100}%`;
-    div.innerHTML = `<span class="text-xs text-green-600 p-1">✓ Placed</span>`;
+  // Show signature placements on this page
+  const pageSignaturePlacements = state.signaturePlacements.filter(p => p.page === state.currentPage);
+  pageSignaturePlacements.forEach((p, i) => {
+    const div = createPlacementElement(p, i, 'signature');
+    overlay.appendChild(div);
+  });
+  
+  // Show date placements on this page
+  const pageDatePlacements = state.datePlacements.filter(p => p.page === state.currentPage);
+  pageDatePlacements.forEach((p, i) => {
+    const div = createPlacementElement(p, i, 'date');
     overlay.appendChild(div);
   });
   
   // Click to place
   overlay.onclick = async (e) => {
+    if (e.target !== overlay) return; // Don't trigger on existing placements
+    
     const rect = overlay.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
     
-    // Add placement (signature will be 20% width, 10% height)
-    state.signaturePlacements.push({
-      page: state.currentPage,
-      x: x - 0.1, // center on click
-      y: y - 0.05,
-      width: 0.2,
-      height: 0.1
-    });
+    if (state.placementMode === 'signature') {
+      // Add signature placement
+      const sigWidth = state.signatureSize / scaledViewport.width;
+      const sigHeight = sigWidth * 0.4; // Aspect ratio ~2.5:1
+      
+      state.signaturePlacements.push({
+        page: state.currentPage,
+        x: Math.max(0, Math.min(1 - sigWidth, x - sigWidth / 2)),
+        y: Math.max(0, Math.min(1 - sigHeight, y - sigHeight / 2)),
+        width: sigWidth,
+        height: sigHeight
+      });
+      
+      showToast('Signature placed', 'success');
+    } else {
+      // Add date placement
+      state.datePlacements.push({
+        page: state.currentPage,
+        x: Math.max(0, x - 0.08),
+        y: Math.max(0, y - 0.02),
+        width: 0.16,
+        height: 0.04
+      });
+      
+      showToast('Date placed', 'success');
+    }
     
-    // Re-render
     await renderCurrentPage();
     updatePlacementsList();
   };
+}
+
+// Create placement element for overlay
+function createPlacementElement(placement, index, type) {
+  const div = document.createElement('div');
+  div.className = `signature-field placed ${type === 'date' ? 'date-field' : ''}`;
+  div.style.left = `${placement.x * 100}%`;
+  div.style.top = `${placement.y * 100}%`;
+  div.style.width = `${placement.width * 100}%`;
+  div.style.height = `${placement.height * 100}%`;
+  div.dataset.type = type;
+  div.dataset.index = index;
+  
+  if (type === 'date') {
+    div.innerHTML = `<span class="text-xs text-blue-600 p-1">📅 Date</span>`;
+  } else {
+    div.innerHTML = `<span class="text-xs text-green-600 p-1">✓ Signature</span>`;
+  }
+  
+  // Click to select
+  div.onclick = (e) => {
+    e.stopPropagation();
+    selectPlacement(placement, index, type);
+  };
+  
+  return div;
+}
+
+// Select placement for editing/removal
+function selectPlacement(placement, index, type) {
+  state.selectedPlacement = { placement, index, type };
+  
+  // Highlight selected
+  document.querySelectorAll('.signature-field').forEach(el => {
+    el.style.outline = 'none';
+  });
+  
+  event.target.closest('.signature-field').style.outline = '2px solid white';
+  
+  // Could show edit options here
+}
+
+// Set placement mode
+function setPlacementMode(mode) {
+  state.placementMode = mode;
+  
+  document.querySelectorAll('[onclick^="setPlacementMode"]').forEach(btn => {
+    btn.classList.remove('bg-blue-600');
+    btn.classList.add('bg-slate-700');
+  });
+  document.querySelector(`[onclick="setPlacementMode('${mode}')"]`)?.classList.add('bg-blue-600');
+  document.querySelector(`[onclick="setPlacementMode('${mode}')"]`)?.classList.remove('bg-slate-700');
 }
 
 // Update placements list
@@ -544,25 +715,57 @@ function updatePlacementsList() {
   const container = document.getElementById('placedSignaturesList');
   const content = document.getElementById('signaturesListContent');
   
-  if (state.signaturePlacements.length === 0) {
+  const totalPlacements = state.signaturePlacements.length + state.datePlacements.length;
+  
+  if (totalPlacements === 0) {
     container.classList.add('hidden');
     return;
   }
   
   container.classList.remove('hidden');
-  content.innerHTML = state.signaturePlacements.map((p, i) => `
-    <div class="flex items-center justify-between bg-slate-700/30 rounded-lg px-3 py-2">
-      <span class="text-sm">Page ${p.page}</span>
-      <button onclick="removePlacement(${i})" class="text-red-400 hover:text-red-300 text-sm">Remove</button>
-    </div>
-  `).join('');
+  
+  let html = '';
+  
+  state.signaturePlacements.forEach((p, i) => {
+    html += `
+      <div class="flex items-center justify-between bg-slate-700/30 rounded-lg px-3 py-2">
+        <span class="text-sm flex items-center gap-2">
+          <span class="text-green-400">✓</span>
+          Signature on Page ${p.page}
+        </span>
+        <button onclick="removeSignaturePlacement(${i})" class="text-red-400 hover:text-red-300 text-sm p-1">✕</button>
+      </div>
+    `;
+  });
+  
+  state.datePlacements.forEach((p, i) => {
+    html += `
+      <div class="flex items-center justify-between bg-slate-700/30 rounded-lg px-3 py-2">
+        <span class="text-sm flex items-center gap-2">
+          <span class="text-blue-400">📅</span>
+          Date on Page ${p.page}
+        </span>
+        <button onclick="removeDatePlacement(${i})" class="text-red-400 hover:text-red-300 text-sm p-1">✕</button>
+      </div>
+    `;
+  });
+  
+  content.innerHTML = html;
 }
 
-// Remove placement
-async function removePlacement(index) {
+// Remove placements
+async function removeSignaturePlacement(index) {
   state.signaturePlacements.splice(index, 1);
   await renderCurrentPage();
   updatePlacementsList();
+  showToast('Signature removed', 'info');
+}
+
+async function removeDatePlacement(index) {
+  state.datePlacements.splice(index, 1);
+  await renderCurrentPage();
+  updatePlacementsList();
+  showToast('Date removed', 'info');
 }
 
 // Page navigation
@@ -584,6 +787,11 @@ async function nextPage() {
 async function previewDocument() {
   const modal = document.getElementById('pdfModal');
   const container = document.getElementById('pdfPages');
+  container.innerHTML = '<div class="text-center py-8"><div class="animate-spin w-8 h-8 border-2 border-white border-t-transparent rounded-full mx-auto"></div><p class="text-sm text-slate-400 mt-2">Loading...</p></div>';
+  
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  
   container.innerHTML = '';
   
   for (let i = 1; i <= state.pdfDoc.numPages; i++) {
@@ -600,14 +808,11 @@ async function previewDocument() {
     await page.render({ canvasContext: ctx, viewport }).promise;
     
     const wrapper = document.createElement('div');
-    wrapper.className = 'text-center';
+    wrapper.className = 'text-center mb-6';
     wrapper.innerHTML = `<p class="text-sm text-slate-400 mb-2">Page ${i}</p>`;
     wrapper.appendChild(canvas);
     container.appendChild(wrapper);
   }
-  
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
 }
 
 function closePdfPreview() {
@@ -628,6 +833,12 @@ function closeHelp() {
 
 // Sign document
 async function signDocument() {
+  // Require at least one signature placement
+  if (state.signaturePlacements.length === 0) {
+    showToast('Please place at least one signature on the document', 'warning');
+    return;
+  }
+  
   const btn = document.getElementById('signButton');
   btn.disabled = true;
   btn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Signing...';
@@ -646,6 +857,14 @@ async function signDocument() {
     const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
     
+    // Format date for stamps
+    const dateFormat = new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    const dateStr = dateFormat.format(new Date());
+    
     // Place signatures on pages
     for (const placement of state.signaturePlacements) {
       const page = pdfDoc.getPage(placement.page - 1);
@@ -661,6 +880,23 @@ async function signDocument() {
         y: sigY,
         width: sigWidth,
         height: sigHeight
+      });
+    }
+    
+    // Place dates on pages
+    for (const placement of state.datePlacements) {
+      const page = pdfDoc.getPage(placement.page - 1);
+      const { width, height } = page.getSize();
+      
+      const dateX = placement.x * width;
+      const dateY = height - (placement.y * height) - (placement.height * height / 2);
+      
+      page.drawText(dateStr, {
+        x: dateX,
+        y: dateY,
+        size: 10,
+        font: font,
+        color: PDFLib.rgb(0.3, 0.3, 0.3)
       });
     }
     
@@ -685,21 +921,21 @@ async function signDocument() {
     
     // Create signature page
     const sigPage = pdfDoc.addPage([612, 792]);
-    const { width, height } = sigPage.getSize();
+    const { width: pageWidth, height: pageHeight } = sigPage.getSize();
     
-    // Header
+    // Header with logo
     sigPage.drawText('DOCUMENT SIGNATURE PAGE', {
-      x: 50, y: height - 50, size: 20, font: fontBold, color: PDFLib.rgb(0.1, 0.1, 0.1)
+      x: 50, y: pageHeight - 50, size: 20, font: fontBold, color: PDFLib.rgb(0.1, 0.1, 0.1)
     });
     
-    sigPage.drawLine({
-      start: { x: 50, y: height - 70 },
-      end: { x: width - 50, y: height - 70 },
-      thickness: 2, color: PDFLib.rgb(0.2, 0.4, 0.8)
+    // Accent line
+    sigPage.drawRectangle({
+      x: 50, y: pageHeight - 70, width: pageWidth - 100, height: 3,
+      color: PDFLib.rgb(0.2, 0.4, 0.8)
     });
     
     // Document info
-    let yPos = height - 110;
+    let yPos = pageHeight - 110;
     
     sigPage.drawText('Document:', { x: 50, y: yPos, size: 11, font: fontBold, color: PDFLib.rgb(0.4, 0.4, 0.4) });
     sigPage.drawText(state.pdfFile.name, { x: 150, y: yPos, size: 11, font: font, color: PDFLib.rgb(0.2, 0.2, 0.2) });
@@ -709,20 +945,27 @@ async function signDocument() {
     sigPage.drawText(state.documentId, { x: 150, y: yPos, size: 11, font: font, color: PDFLib.rgb(0.2, 0.2, 0.2) });
     
     yPos -= 25;
+    sigPage.drawText('Document Hash:', { x: 50, y: yPos, size: 11, font: fontBold, color: PDFLib.rgb(0.4, 0.4, 0.4) });
+    sigPage.drawText(state.documentHash, { x: 150, y: yPos, size: 11, font: font, color: PDFLib.rgb(0.2, 0.2, 0.2) });
+    
+    yPos -= 25;
     const signedDate = new Date().toLocaleString('en-US', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
       hour: '2-digit', minute: '2-digit', timeZoneName: 'short'
     });
     sigPage.drawText('Signed:', { x: 50, y: yPos, size: 11, font: fontBold, color: PDFLib.rgb(0.4, 0.4, 0.4) });
-    sigPage.drawText(signedDate, { x: 150, y: yPos, size: 11, font: font, color: PDFLib.rgb(0.2, 0.2, 0.2) });
+    // Truncate date if too long
+    const truncatedDate = signedDate.length > 50 ? signedDate.substring(0, 50) + '...' : signedDate;
+    sigPage.drawText(truncatedDate, { x: 150, y: yPos, size: 11, font: font, color: PDFLib.rgb(0.2, 0.2, 0.2) });
     
     // Signatory section
     yPos -= 50;
     sigPage.drawText('SIGNATORY', { x: 50, y: yPos, size: 14, font: fontBold, color: PDFLib.rgb(0.1, 0.1, 0.1) });
     
     yPos -= 15;
+    const boxHeight = state.signerTitle || state.signerOrg ? 160 : 120;
     sigPage.drawRectangle({
-      x: 50, y: yPos - 130, width: width - 100, height: 140,
+      x: 50, y: yPos - boxHeight, width: pageWidth - 100, height: boxHeight,
       borderColor: PDFLib.rgb(0.8, 0.8, 0.8), borderWidth: 1,
       color: PDFLib.rgb(0.99, 0.99, 0.99)
     });
@@ -747,12 +990,12 @@ async function signDocument() {
       sigPage.drawText(state.signerOrg, { x: 150, y: yPos, size: 12, font: font, color: PDFLib.rgb(0.1, 0.1, 0.1) });
     }
     
-    yPos -= 25;
+    yPos -= 30;
     sigPage.drawText('Signature:', { x: 70, y: yPos, size: 10, font: fontBold, color: PDFLib.rgb(0.5, 0.5, 0.5) });
     sigPage.drawImage(sigImage, { x: 70, y: yPos - 50, width: 180, height: 50 });
     
     // QR Code section
-    yPos = yPos - 100;
+    yPos = Math.min(yPos - 100, 250);
     sigPage.drawText('VERIFICATION', { x: 50, y: yPos, size: 14, font: fontBold, color: PDFLib.rgb(0.1, 0.1, 0.1) });
     
     const verifyUrl = `${window.location.origin}/verify.html?id=${state.documentId}`;
@@ -764,6 +1007,7 @@ async function signDocument() {
     
     sigPage.drawText('Scan to verify authenticity', { x: 160, y: yPos - 50, size: 10, font: font, color: PDFLib.rgb(0.4, 0.4, 0.4) });
     sigPage.drawText(`ID: ${state.documentId}`, { x: 160, y: yPos - 70, size: 9, font: font, color: PDFLib.rgb(0.5, 0.5, 0.5) });
+    sigPage.drawText(`Hash: ${state.documentHash}`, { x: 160, y: yPos - 85, size: 9, font: font, color: PDFLib.rgb(0.5, 0.5, 0.5) });
     
     // Footer
     sigPage.drawText('This document was signed electronically using SignBear 🧸', {
@@ -775,6 +1019,9 @@ async function signDocument() {
     
     // Save
     state.signedPdfBytes = await pdfDoc.save();
+    
+    // Save document info for verification
+    saveSignedDocumentInfo();
     
     // Update final page
     const initials = state.signerName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -790,11 +1037,12 @@ async function signDocument() {
     const qrCanvas = document.getElementById('qrCode');
     await QRCode.toCanvas(qrCanvas, verifyUrl, { width: 180, margin: 2 });
     
+    showToast('Document signed successfully!', 'success');
     goToStep(4);
     
   } catch (error) {
     console.error('Error signing document:', error);
-    alert('Error signing document: ' + error.message);
+    showToast('Error signing document: ' + error.message, 'error');
     btn.disabled = false;
     btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Sign & Download';
   }
@@ -803,7 +1051,7 @@ async function signDocument() {
 // Copy document ID
 function copyDocId() {
   navigator.clipboard.writeText(state.documentId);
-  // Could add toast notification here
+  showToast('Document ID copied!', 'success');
 }
 
 // Download signed PDF
@@ -820,6 +1068,8 @@ function downloadSignedPdf() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+  
+  showToast('PDF downloaded!', 'success');
 }
 
 // Share document
@@ -833,7 +1083,7 @@ async function shareDocument() {
     } catch (e) {}
   } else {
     await navigator.clipboard.writeText(shareText);
-    alert('Verification link copied to clipboard!');
+    showToast('Verification link copied to clipboard!', 'success');
   }
 }
 
@@ -849,9 +1099,12 @@ function resetApp() {
     strokes: [],
     uploadedSigData: null,
     documentId: generateDocumentId(),
+    documentHash: null,
     signedPdfBytes: null,
     signaturePlacements: [],
-    pageCanvases: {}
+    datePlacements: [],
+    placementMode: 'signature',
+    selectedPlacement: null
   });
   
   document.getElementById('typedSignature').value = '';
@@ -863,10 +1116,10 @@ function resetApp() {
 }
 
 // Close modals on backdrop click
-document.getElementById('pdfModal').addEventListener('click', (e) => {
+document.getElementById('pdfModal')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closePdfPreview();
 });
 
-document.getElementById('helpModal').addEventListener('click', (e) => {
+document.getElementById('helpModal')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeHelp();
 });

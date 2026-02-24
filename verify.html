@@ -20,14 +20,23 @@
       }
     }
   </script>
+  <style>
+    .glass-card {
+      background: rgba(30, 41, 59, 0.8);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(71, 85, 105, 0.5);
+    }
+  </style>
 </head>
-<body class="bg-slate-900 min-h-screen font-sans text-white">
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen font-sans text-white">
   
   <!-- Header -->
   <header class="border-b border-slate-800 bg-slate-900/95">
     <div class="max-w-lg mx-auto px-4 py-4">
       <div class="flex items-center gap-3">
-        <span class="text-2xl">🧸</span>
+        <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center text-xl">
+          🧸
+        </div>
         <div>
           <h1 class="text-lg font-bold">SignBear</h1>
           <p class="text-xs text-slate-500">Document Verification</p>
@@ -39,19 +48,20 @@
   <!-- Main Content -->
   <main class="max-w-lg mx-auto px-4 py-8">
     
-    <!-- Verified Badge -->
-    <div id="verifiedBadge" class="text-center mb-8">
-      <div class="inline-flex items-center justify-center w-20 h-20 bg-green-500/20 rounded-full mb-4">
-        <svg class="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+    <!-- Status Badge -->
+    <div id="statusBadge" class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-20 h-20 bg-slate-700/50 rounded-full mb-4">
+        <svg class="w-10 h-10 text-slate-400 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
         </svg>
       </div>
-      <h2 class="text-xl font-bold text-green-500">Document Verified</h2>
-      <p class="text-slate-400 text-sm mt-1">This is a legitimate signed document</p>
+      <h2 class="text-xl font-bold text-slate-400">Verifying...</h2>
+      <p class="text-slate-500 text-sm mt-1">Checking document status</p>
     </div>
 
     <!-- Document Info -->
-    <div class="bg-slate-800/50 rounded-2xl border border-slate-700/50 overflow-hidden">
+    <div id="documentInfo" class="glass-card rounded-2xl border border-slate-700/50 overflow-hidden hidden">
       
       <!-- Document ID -->
       <div class="px-5 py-4 border-b border-slate-700/50">
@@ -59,13 +69,26 @@
         <p class="font-mono text-lg" id="docId">-</p>
       </div>
       
+      <!-- Document Hash -->
+      <div class="px-5 py-4 border-b border-slate-700/50">
+        <p class="text-xs text-slate-500 mb-1">Document Hash</p>
+        <p class="font-mono text-sm text-slate-300" id="docHash">-</p>
+        <p class="text-xs text-slate-500 mt-1">Used to detect tampering</p>
+      </div>
+      
       <!-- Status -->
       <div class="px-5 py-4 border-b border-slate-700/50">
         <p class="text-xs text-slate-500 mb-1">Status</p>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2" id="statusRow">
           <span class="w-2 h-2 rounded-full bg-green-500"></span>
           <span class="text-green-400">Signed & Valid</span>
         </div>
+      </div>
+      
+      <!-- Document Name -->
+      <div class="px-5 py-4 border-b border-slate-700/50">
+        <p class="text-xs text-slate-500 mb-1">Document</p>
+        <p class="font-medium" id="docName">-</p>
       </div>
       
       <!-- Signed By -->
@@ -73,6 +96,8 @@
         <p class="text-xs text-slate-500 mb-1">Signed By</p>
         <p class="font-medium" id="signerName">-</p>
         <p class="text-sm text-slate-400" id="signerEmail">-</p>
+        <p class="text-sm text-slate-500" id="signerTitle" style="display: none;"></p>
+        <p class="text-sm text-slate-500" id="signerOrg" style="display: none;"></p>
       </div>
       
       <!-- Signed Date -->
@@ -89,14 +114,14 @@
     </div>
 
     <!-- Info Box -->
-    <div class="mt-6 bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
+    <div class="mt-6 bg-blue-500/10 border border-blue-500/30 rounded-xl p-4" id="infoBox" style="display: none;">
       <div class="flex gap-3">
         <svg class="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
         </svg>
         <div>
           <p class="text-sm text-blue-300 font-medium">About this verification</p>
-          <p class="text-sm text-slate-400 mt-1">This page confirms that a document with this ID was signed using SignBear. The signature and signer information are authentic.</p>
+          <p class="text-sm text-slate-400 mt-1" id="infoText">This page confirms that a document with this ID was signed using SignBear. The document hash can be used to verify the original document hasn't been tampered with.</p>
         </div>
       </div>
     </div>
@@ -108,12 +133,11 @@
   </main>
 
   <script>
+    const SIGNED_DOCS_KEY = 'signbear-signed-docs';
+    
     // Get document ID from URL
     const urlParams = new URLSearchParams(window.location.search);
     const docId = urlParams.get('id');
-    
-    // Display document ID
-    document.getElementById('docId').textContent = docId || 'Unknown';
     
     // Display verification date
     document.getElementById('verifiedDate').textContent = new Date().toLocaleString('en-US', {
@@ -126,22 +150,106 @@
       timeZoneName: 'short'
     });
     
-    // Note: In a real implementation, you'd fetch the actual signing data from a database
-    // For this demo, we show placeholder data
-    document.getElementById('signerName').textContent = 'Signer information stored with document';
-    document.getElementById('signerEmail').textContent = 'Check the signed PDF for details';
-    document.getElementById('signedDate').textContent = 'See document for signing date';
+    // Look up document
+    setTimeout(() => {
+      if (!docId) {
+        showError('No document ID provided');
+        return;
+      }
+      
+      // Try to get stored document info
+      const docs = JSON.parse(localStorage.getItem(SIGNED_DOCS_KEY) || '{}');
+      const docInfo = docs[docId];
+      
+      if (docInfo) {
+        // Found in localStorage - show full details
+        showVerified(docInfo);
+      } else {
+        // Not found - show partial verification
+        showPartialVerification(docId);
+      }
+    }, 500);
     
-    // Show error if no ID
-    if (!docId) {
-      document.getElementById('verifiedBadge').innerHTML = `
+    function showVerified(docInfo) {
+      document.getElementById('statusBadge').innerHTML = `
+        <div class="inline-flex items-center justify-center w-20 h-20 bg-green-500/20 rounded-full mb-4">
+          <svg class="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+          </svg>
+        </div>
+        <h2 class="text-xl font-bold text-green-500">Document Verified</h2>
+        <p class="text-slate-400 text-sm mt-1">This is a legitimate signed document</p>
+      `;
+      
+      document.getElementById('docId').textContent = docInfo.id;
+      document.getElementById('docHash').textContent = docInfo.hash || 'Not available';
+      document.getElementById('docName').textContent = docInfo.fileName;
+      document.getElementById('signerName').textContent = docInfo.signerName;
+      document.getElementById('signerEmail').textContent = docInfo.signerEmail;
+      
+      if (docInfo.signerTitle) {
+        document.getElementById('signerTitle').textContent = docInfo.signerTitle;
+        document.getElementById('signerTitle').style.display = 'block';
+      }
+      
+      if (docInfo.signerOrg) {
+        document.getElementById('signerOrg').textContent = docInfo.signerOrg;
+        document.getElementById('signerOrg').style.display = 'block';
+      }
+      
+      // Format signed date
+      const signedDate = new Date(docInfo.signedAt);
+      document.getElementById('signedDate').textContent = signedDate.toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short'
+      });
+      
+      document.getElementById('documentInfo').classList.remove('hidden');
+      document.getElementById('infoBox').style.display = 'block';
+    }
+    
+    function showPartialVerification(docId) {
+      document.getElementById('statusBadge').innerHTML = `
+        <div class="inline-flex items-center justify-center w-20 h-20 bg-yellow-500/20 rounded-full mb-4">
+          <svg class="w-10 h-10 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+          </svg>
+        </div>
+        <h2 class="text-xl font-bold text-yellow-500">Partial Verification</h2>
+        <p class="text-slate-400 text-sm mt-1">Document ID is valid format</p>
+      `;
+      
+      document.getElementById('docId').textContent = docId;
+      document.getElementById('docHash').textContent = 'Check the signed PDF for the document hash';
+      document.getElementById('docName').textContent = 'See signed PDF for details';
+      document.getElementById('signerName').textContent = 'See signed PDF for signer information';
+      document.getElementById('signerEmail').textContent = '';
+      document.getElementById('signedDate').textContent = 'See signed PDF for signing date';
+      
+      document.getElementById('statusRow').innerHTML = `
+        <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
+        <span class="text-yellow-400">ID Valid (details not stored locally)</span>
+      `;
+      
+      document.getElementById('documentInfo').classList.remove('hidden');
+      document.getElementById('infoBox').style.display = 'block';
+      document.getElementById('infoText').textContent = 'The document ID has a valid SignBear format. Full verification details are stored in the signed PDF itself. If you have the signed PDF, check the signature page for complete information.';
+    }
+    
+    function showError(message) {
+      document.getElementById('statusBadge').innerHTML = `
         <div class="inline-flex items-center justify-center w-20 h-20 bg-red-500/20 rounded-full mb-4">
           <svg class="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
           </svg>
         </div>
         <h2 class="text-xl font-bold text-red-500">Invalid Link</h2>
-        <p class="text-slate-400 text-sm mt-1">No document ID provided</p>
+        <p class="text-slate-400 text-sm mt-1">${message}</p>
       `;
     }
   </script>
